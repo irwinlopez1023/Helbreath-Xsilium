@@ -5,7 +5,16 @@ using namespace std;
 #include <windows.h>
 #include <iostream>
 
-#define MAXRANKEXP 31//20
+#define DEF_MAXRANKLEVEL 30                 // tope de rango
+#define MAXRANKEXP (DEF_MAXRANKLEVEL + 1)   // la tabla necesita indices 0..30
+
+// Tickets de rango: hasta que rango sube cada uno (el tercero usa DEF_MAXRANKLEVEL)
+#define DEF_RANKTICKET_TOPE1 10
+#define DEF_RANKTICKET_TOPE2 20
+
+// En areuni y VipMap1 el rango deja de subir al llegar aqui.
+// Hoy es igual al tope (30). Si el 20 original era deliberado, cambialo a 20.
+#define DEF_RANKLIMIT_MAPASFARM DEF_MAXRANKLEVEL
 
 class CRank
 {

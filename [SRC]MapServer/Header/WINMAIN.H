@@ -24,6 +24,7 @@ void Borrado();
 void PutLogTradeFileList(char * cStr);
 void PutLogCoinsFileList(char * cStr);
 void PutLogHacksFileList(char * cStr);
+void PutLogAtaque(char * cStr);
 void PutLogOnlinesFileList(char * cStr);
 //lalov9 drops
 void PutLogDrops(char * cStr);

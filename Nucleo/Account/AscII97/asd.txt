@@ -1,25 +1,10 @@
 [Account Info]
-account-name=asd
-account-password=asd
-account-Email=asd@asd.asd
-account-Quiz=asd
-account-Answer=asd
-account-change-password=2024 12 18
+account-name     = asd
+account-password = asd
+account-Email    = asd@asd.asd
+account-Quiz = asd
+account-Answer = asd
+account-change-password = 2024 12 18
 
 [CHARACTERS]
-account-character-SEB=asd1
-
-[MAGIC-SKILL-MASTERY]
-magic-mastery=0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-
-[STATUS]
-character-LEVEL=
-character-STR=
-character-DEX=
-character-INT=
-character-MAG=
-character-VIT=
-character-CHARISMA=
-character-EXP=
-
-account-character-SEB  = Test
+account-character-SEB  = asd1

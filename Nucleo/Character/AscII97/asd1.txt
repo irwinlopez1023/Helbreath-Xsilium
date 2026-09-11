@@ -1,13 +1,13 @@
 [FILE-DATE]
 
-file-saved-date: 2025 7 7 13 25
+file-saved-date: 2026 9 10 21 44
 
 [NAME-ACCOUNT]
 
 character-name     = asd1
 account-name       = asd
 Hour-Play = 0
-Min-Play = 2
+Min-Play = 8
 
 CheckProcess = OFF
 
@@ -22,9 +22,9 @@ character-guild-rank = -1
 
 [MAP-DATA]
 
-character-loc-map = Extreme
-character-loc-x   = 72
-character-loc-y   = 78
+character-loc-map = elvine
+character-loc-x   = 185
+character-loc-y   = 84
 
 locked-map-name = NONE
 locked-map-time = 0
@@ -45,9 +45,9 @@ character-CHARISMA = 195
 
 [STATUS]
 
-character-HP       = 1452
+character-HP       = 1453
 character-MP       = 1252
-character-SP       = 572
+character-SP       = 1156
 sex-status       = 2
 skin-status      = 1
 hairstyle-status = 4
@@ -66,7 +66,7 @@ timeleft-force-recall  = 0
 timeleft-firm-staminar = 0
 dead-penalty-time = 0
 penalty-block-date = 0 0 0
-special-ability-time = 879
+special-ability-time = 495
 
 
 [POINTS]
@@ -141,11 +141,11 @@ appr-color2 = 0
 
 [RANK-SYSTEM]
 
-character-rank-level = 0
+character-rank-level = 2
 character-rank-points = 0
 character-rank-exp = 0
 
-character-rank-addstr = 0
+character-rank-addstr = 2
 character-rank-addvit = 0
 character-rank-addint = 0
 character-rank-adddex = 0
@@ -192,12 +192,12 @@ character-back-level = 0
 [ITEMLIST]
 
 character-item = BarrackSword         1 0 0 0 0 0 0 0 0 500 0 0 -4
-character-item = RecallScroll         1 0 0 0 0 0 0 0 0 120 0 113 49
 character-item = RedCandy             1 0 0 0 0 0 0 0 0 300 0 22 -1
 character-item = BlueCandy            1 0 0 0 0 0 0 0 0 300 0 50 -1
 character-item = GreenCandy           1 0 0 0 0 0 0 0 0 300 0 78 0
 character-item = WoodShield           1 0 0 0 0 0 0 0 0 300 0 150 2
 character-item = PowerGreenPotion     1 0 0 0 0 0 0 0 0 600 0 119 0
+character-item = Gold                 2530 0 0 0 0 0 0 0 0 600 0 170 57
 character-item = MagicWand(MS0)       1 0 0 0 0 0 0 0 0 1200 0 105 -4
 
 
@@ -206,8 +206,8 @@ character-item = MagicWand(MS0)       1 0 0 0 0 0 0 0 0 1200 0 105 -4
 [MAGIC-SKILL-MASTERY]
 
 //------------------012345678901234567890123456789012345678901234567890
-magic-mastery     = 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-skill-mastery     = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+magic-mastery     = 0000000000001000000000000000000011100000000000000000000000000000000000000000000000000000000000000000
+skill-mastery     = 100 100 100 0 100 100 100 100 100 100 100 100 100 100 100 0 0 0 0 0 0 100 0 20 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
 skill-SSN     = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
 
 Achivements     = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 

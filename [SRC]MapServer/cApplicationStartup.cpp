@@ -106,513 +106,213 @@ void _StopTimer(MMRESULT timerid)
 	}
 }
 
-void PutLogList(char * cMsg)
-{
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
+// ---------------------------------------------------------------------------
+// Logs del servidor
+//
+// Antes cada funcion de log tenia su propia copia del mismo codigo, con doble
+// fclose, strcat sin limite sobre buffers de 30.000 bytes y un contador
+// (G_sLogCounter) compartido por todas. Ahora todas pasan por _LogBuffered,
+// y cada log lleva su propio contador y su propia hora de volcado.
+// ---------------------------------------------------------------------------
+
+struct stLogState {
+	short sCounter;
 	DWORD dwTime;
+	stLogState() : sCounter(0), dwTime(0) {}
+};
+
+static stLogState G_stLogMapServer, G_stLogGM, G_stLogCharacters, G_stLogErrors, G_stLogChats;
+static stLogState G_stLogTrade, G_stLogCoins, G_stLogHacks, G_stLogDrops, G_stLogItems, G_stLogEkPk;
+
+// Escribe el buffer al archivo del dia y lo vacia. Si el archivo no abre, se descarta.
+static void _LogFlush(char * pBuffer, size_t iBufSize, stLogState * pState, const char * cDir, const char * cFileFmt)
+{
+	char cFileName[256];
+	SYSTEMTIME SysTime;
 	FILE * pLogFile;
 
-	std::cout << cMsg << std::endl;
-	/*G_cMsgUpdated = FALSE;
-	SendMessage(List1, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cMsg);
-	SendMessage(List1, (UINT)LB_SETCURSEL, ItemCount, 0);
-	ItemCount++;*/
+	if (pBuffer[0] != 0) {
+		GetLocalTime(&SysTime);
+		_mkdir("..\\ServerLogs");
+		_mkdir(cDir);
 
-	dwTime = timeGetTime();
+		ZeroMemory(cFileName, sizeof(cFileName));
+		_snprintf(cFileName, sizeof(cFileName) - 1, cFileFmt, SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\MapServer");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\MapServer\\MapServerLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-
-		pLogFile = fopen(cTempBuffer, "at");
-		if (pLogFile == NULL) return;
-		fwrite(G_cLogBuffer, 1, strlen(G_cLogBuffer), pLogFile);
-		fclose(pLogFile);
-
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer, sizeof(G_cLogBuffer));
-
-		if (pLogFile != NULL) fclose(pLogFile);
+		pLogFile = fopen(cFileName, "at");
+		if (pLogFile != NULL) {
+			fwrite(pBuffer, 1, strlen(pBuffer), pLogFile);
+			fclose(pLogFile);
+			pLogFile = NULL;
+		}
 	}
+
+	pState->sCounter = 0;
+	ZeroMemory(pBuffer, iBufSize);
 }
 
+// Acumula una linea con hora y la vuelca cada 100 lineas, cada 10 segundos,
+// cuando el buffer se llena o cuando bFlushNow es TRUE.
+static void _LogBuffered(char * pBuffer, size_t iBufSize, stLogState * pState, const char * cDir, const char * cFileFmt, const char * cMsg, BOOL bFlushNow)
+{
+	char cLine[600];
+	SYSTEMTIME SysTime;
+	DWORD dwTime;
+
+	if (cMsg == NULL) return;
+
+	dwTime = timeGetTime();
+	if (pState->sCounter == 0) pState->dwTime = dwTime;
+	pState->sCounter++;
+
+	GetLocalTime(&SysTime);
+	ZeroMemory(cLine, sizeof(cLine));
+	_snprintf(cLine, sizeof(cLine) - 1, "%02d:%02d:%02d\t%s\n", SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cLine[sizeof(cLine) - 1] = 0;
+
+	// Si no cabe, primero se vuelca lo acumulado
+	if (strlen(pBuffer) + strlen(cLine) >= iBufSize) _LogFlush(pBuffer, iBufSize, pState, cDir, cFileFmt);
+	if (strlen(pBuffer) + strlen(cLine) < iBufSize) strcat(pBuffer, cLine);
+
+	if (bFlushNow || (pState->sCounter >= 100) || (dwTime - pState->dwTime > 10 * 1000))
+		_LogFlush(pBuffer, iBufSize, pState, cDir, cFileFmt);
+}
+
+void PutLogList(char * cMsg)
+{
+	std::cout << cMsg << std::endl;
+	_LogBuffered(G_cLogBuffer, sizeof(G_cLogBuffer), &G_stLogMapServer, "..\\ServerLogs\\MapServer",
+		"..\\ServerLogs\\MapServer\\MapServerLogs [%02d-%02d-%04d].log", cMsg, FALSE);
+}
 
 void PutGMLogData(char * cStr)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cStr);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer4, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\GM");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\GM\\GMLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer4, 1, strlen(G_cLogBuffer4), pLogFile);
-		fclose(pLogFile);
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer4, sizeof(G_cLogBuffer4));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer4, sizeof(G_cLogBuffer4), &G_stLogGM, "..\\ServerLogs\\GM",
+		"..\\ServerLogs\\GM\\GMLogs [%02d-%02d-%04d].log", cStr, FALSE);
 }
-
 
 void CharacterLogList(char * cMsg)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
 	std::cout << cMsg << std::endl;
-
-	/*G_cMsgUpdated = FALSE;
-	SendMessage(List2, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cMsg);
-	SendMessage(List2, (UINT)LB_SETCURSEL, ItemCount2, 0);
-	ItemCount2++;*/
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer7, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Characters");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Characters\\CharactersLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer7, 1, strlen(G_cLogBuffer7), pLogFile);
-		fclose(pLogFile);
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer7, sizeof(G_cLogBuffer7));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer7, sizeof(G_cLogBuffer7), &G_stLogCharacters, "..\\ServerLogs\\Characters",
+		"..\\ServerLogs\\Characters\\CharactersLogs [%02d-%02d-%04d].log", cMsg, FALSE);
 }
 
 void ConfigList(char * cMsg)
 {
-	/*G_cMsgUpdated = FALSE;
-	SendMessage(List3, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cMsg);
-	SendMessage(List3, (UINT)LB_SETCURSEL, ItemCount3, 0);
-	ItemCount3++;*/
 }
 
 void UpdateConfigList(char * cMsg)
 {
-
 	std::cout << cMsg << std::endl;
-	/*G_cMsgUpdated = FALSE;
-	ItemCount3 = ItemCount3 - 4;
-	SendMessage(List3, (UINT)LB_DELETESTRING, ItemCount3, 0);
-	SendMessage(List3, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cMsg);
-	SendMessage(List3, (UINT)LB_SETCURSEL, ItemCount3, 0);
-	ItemCount3 = ItemCount3 + 4*/;
 }
 
 void ErrorList(char * cMsg)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
 	std::cout << cMsg << std::endl;
-	/*G_cMsgUpdated = FALSE;
-	SendMessage(List4, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cMsg);
-	SendMessage(List4, (UINT)LB_SETCURSEL, ItemCount4, 0);
-	ItemCount4++;
-*/
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer9, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\MapServer Errors");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\MapServer Errors\\MS Errors [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer9, 1, strlen(G_cLogBuffer9), pLogFile);
-		fclose(pLogFile);
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer9, sizeof(G_cLogBuffer9));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer9, sizeof(G_cLogBuffer9), &G_stLogErrors, "..\\ServerLogs\\MapServer Errors",
+		"..\\ServerLogs\\MapServer Errors\\MS Errors [%02d-%02d-%04d].log", cMsg, FALSE);
 }
 
 void ChatLogs(char * cMsg)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
 	std::cout << cMsg << std::endl;
-	/*/ *G_cMsgUpdated = FALSE;
-	SendMessage(List5, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cMsg);
-	SendMessage(List5, (UINT)LB_SETCURSEL, ItemCount5, 0);
-	ItemCount5++; * /*/
-
-		dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer3, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Chats");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Chats\\ChatsLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer3, 1, strlen(G_cLogBuffer3), pLogFile);
-		fclose(pLogFile);
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer3, sizeof(G_cLogBuffer3));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer3, sizeof(G_cLogBuffer3), &G_stLogChats, "..\\ServerLogs\\Chats",
+		"..\\ServerLogs\\Chats\\ChatsLogs [%02d-%02d-%04d].log", cMsg, FALSE);
 }
-
 
 void PutLogTradeFileList(char * cStr)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cStr);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer10, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\TradeLogs");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\TradeLogs\\LogTrade [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer10, 1, strlen(G_cLogBuffer10), pLogFile);
-		fclose(pLogFile);
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer10, sizeof(G_cLogBuffer10));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer10, sizeof(G_cLogBuffer10), &G_stLogTrade, "..\\ServerLogs\\TradeLogs",
+		"..\\ServerLogs\\TradeLogs\\LogTrade [%02d-%02d-%04d].log", cStr, FALSE);
 }
 
 void PutLogCoinsFileList(char * cStr)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cStr);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer5, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Coins");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Coins\\CoinsLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer5, 1, strlen(G_cLogBuffer5), pLogFile);
-		fclose(pLogFile);
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer5, sizeof(G_cLogBuffer5));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer5, sizeof(G_cLogBuffer5), &G_stLogCoins, "..\\ServerLogs\\Coins",
+		"..\\ServerLogs\\Coins\\CoinsLogs [%02d-%02d-%04d].log", cStr, FALSE);
 }
 
 void PutLogHacksFileList(char * cStr)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
-	dwTime = timeGetTime();
-
 	std::cout << cStr << std::endl;
-	/*G_cMsgUpdated = FALSE;
-	SendMessage(List4, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cStr);
-	SendMessage(List4, (UINT)LB_SETCURSEL, ItemCount4, 0);
-	ItemCount4++;*/
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cStr);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer6, cTempBuffer);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	_mkdir("..\\ServerLogs\\Hacks");
-
-	wsprintf(cTempBuffer, "..\\ServerLogs\\Hacks\\HacksLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-	pLogFile = fopen(cTempBuffer, "at");
-
-	if (pLogFile == NULL) return;
-
-	fwrite(G_cLogBuffer6, 1, strlen(G_cLogBuffer6), pLogFile);
-	fclose(pLogFile);
-	ZeroMemory(G_cLogBuffer6, sizeof(G_cLogBuffer6));
-	if (pLogFile != NULL) fclose(pLogFile);
+	// Los hacks se escriben al momento, sin esperar a juntar 100
+	_LogBuffered(G_cLogBuffer6, sizeof(G_cLogBuffer6), &G_stLogHacks, "..\\ServerLogs\\Hacks",
+		"..\\ServerLogs\\Hacks\\HacksLogs [%02d-%02d-%04d].log", cStr, TRUE);
 }
 
 //Agregado LogDrop Lalov9
 void PutLogDrops(char * cStr)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
 	std::cout << cStr << std::endl;
-	/*/ *G_cMsgUpdated = FALSE;
-	SendMessage(List4, (UINT)LB_ADDSTRING, (WPARAM)0, (LPARAM)cStr);
-	SendMessage(List4, (UINT)LB_SETCURSEL, ItemCount4, 0);
-	ItemCount4++; * /*/
-
-		GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cStr);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer11, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Drops");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Drops\\DropsLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-
-		fwrite(G_cLogBuffer11, 1, strlen(G_cLogBuffer11), pLogFile);
-		fclose(pLogFile);
-
-		G_sLogCounter = 0;
-
-		ZeroMemory(G_cLogBuffer11, sizeof(G_cLogBuffer11));
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer11, sizeof(G_cLogBuffer11), &G_stLogDrops, "..\\ServerLogs\\Drops",
+		"..\\ServerLogs\\Drops\\DropsLogs [%02d-%02d-%04d].log", cStr, FALSE);
 }
 
 void PutLogOnlinesFileList(char * cStr)
 {
-	char cTempBuffer[512];
 	FILE * pLogFile;
 
+	if (cStr == NULL) return;
+
+	_mkdir("..\\ServerLogs");
 	_mkdir("..\\ServerLogs\\OnlineUsers");
 
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "..\\ServerLogs\\OnlineUsers\\OnlineUsers.log");
-
-	pLogFile = fopen(cTempBuffer, "w");
-
+	pLogFile = fopen("..\\ServerLogs\\OnlineUsers\\OnlineUsers.log", "w");
 	if (pLogFile == NULL) return;
 
 	fwrite(cStr, 1, strlen(cStr), pLogFile);
 	fclose(pLogFile);
-	if (pLogFile != NULL) fclose(pLogFile);
+	pLogFile = NULL;
 }
 
 void PutLogItemsList(char * cMsg)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pLogFile;
-
-	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
-
-	GetLocalTime(&SysTime);
-
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
-
-	strcat(G_cLogBuffer2, cTempBuffer);
-
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Items");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Items\\ItemLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-
-		pLogFile = fopen(cTempBuffer, "at");
-		if (pLogFile == NULL) return;
-		fwrite(G_cLogBuffer2, 1, strlen(G_cLogBuffer2), pLogFile);
-		fclose(pLogFile);
-
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer2, sizeof(G_cLogBuffer2));
-
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	_LogBuffered(G_cLogBuffer2, sizeof(G_cLogBuffer2), &G_stLogItems, "..\\ServerLogs\\Items",
+		"..\\ServerLogs\\Items\\ItemLogs [%02d-%02d-%04d].log", cMsg, FALSE);
 }
 
 void PutEkAndPkLogFileList(char * cMsg)
 {
-	char cTempBuffer[512];
+	_LogBuffered(G_cLogBuffer8, sizeof(G_cLogBuffer8), &G_stLogEkPk, "..\\ServerLogs\\EksAndPks",
+		"..\\ServerLogs\\EksAndPks\\EksAndPksLogs [%02d-%02d-%04d].log", cMsg, FALSE);
+}
+
+// Aviso de intento de ataque al servidor: en rojo en la consola y al momento
+// en ..\ServerLogs\Ataques\Ataques [dd-mm-aaaa].txt
+void PutLogAtaque(char * cStr)
+{
+	char cLine[1100], cFileName[256];
 	SYSTEMTIME SysTime;
-	DWORD dwTime;
 	FILE * pLogFile;
+	HANDLE hConsole;
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	BOOL bColor;
 
-	dwTime = timeGetTime();
+	if (cStr == NULL) return;
 
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	bColor = ((hConsole != NULL) && (hConsole != INVALID_HANDLE_VALUE) && GetConsoleScreenBufferInfo(hConsole, &csbi));
+	if (bColor) SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_INTENSITY);
+	std::cout << "[ATAQUE] " << cStr << std::endl;
+	if (bColor) SetConsoleTextAttribute(hConsole, csbi.wAttributes);
 
 	GetLocalTime(&SysTime);
+	_mkdir("..\\ServerLogs");
+	_mkdir("..\\ServerLogs\\Ataques");
 
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	ZeroMemory(cFileName, sizeof(cFileName));
+	_snprintf(cFileName, sizeof(cFileName) - 1, "..\\ServerLogs\\Ataques\\Ataques [%02d-%02d-%04d].txt", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 
-	strcat(G_cLogBuffer8, cTempBuffer);
+	ZeroMemory(cLine, sizeof(cLine));
+	_snprintf(cLine, sizeof(cLine) - 1, "%02d:%02d:%02d\t%s\n", SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cStr);
+	cLine[sizeof(cLine) - 1] = 0;
 
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\EksAndPks");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\EksAndPks\\EksAndPksLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-		pLogFile = fopen(cTempBuffer, "at");
-
-		if (pLogFile == NULL) return;
-		fwrite(G_cLogBuffer8, 1, strlen(G_cLogBuffer8), pLogFile);
-		fclose(pLogFile);
-
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer8, sizeof(G_cLogBuffer8));
-
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+	pLogFile = fopen(cFileName, "at");
+	if (pLogFile == NULL) return;
+	fwrite(cLine, 1, strlen(cLine), pLogFile);
+	fclose(pLogFile);
+	pLogFile = NULL;
 }
 
 bool Initialize()

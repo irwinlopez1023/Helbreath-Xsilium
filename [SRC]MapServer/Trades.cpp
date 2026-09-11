@@ -495,7 +495,7 @@ void Trades::req_trade(int client, char * pData)
 	{
 	case DEF_TRADEEK:
 	{
-		if (index > vec_trade_ek.size() || index < 0) return;
+		if (index < 0 || (size_t)index >= vec_trade_ek.size()) return;
 		if (quant < 1 || quant > 20) return;
 
 		if (c_map->_iGetItemSpaceLeft(client) < quant)
@@ -512,6 +512,9 @@ void Trades::req_trade(int client, char * pData)
 			return;
 		}
 
+		p->m_iEnemyKillCount -= icost;          // cobra ANTES de entregar
+		int iGiven = 0;
+
 		class CItem * pItem;
 		int iItemID, iEraseReq;
 
@@ -521,19 +524,24 @@ void Trades::req_trade(int client, char * pData)
 			if (!c_map->_bInitItemAttr(pItem, vec_trade_ek[index].itemname))
 			{
 				delete pItem;
-				return;
+				break;
 			}
 
 			if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 			{
 				delete pItem;
-				return;
+				break;
 			}
 
 			c_map->SendItemNotifyMsg(client, CLIENT_NOTIFY_ITEMOBTAINED, pItem, NULL);
+			iGiven++;
 		}
 
-		p->m_iEnemyKillCount -= icost;
+		if (iGiven < quant)          // devuelve lo que no pudo entregar
+		{
+			p->m_iEnemyKillCount += vec_trade_ek[index].eks * (quant - iGiven);
+			c_map->ShowClientMsg(client, "No puedes cargar mas peso. Solo se cobro lo entregado.");
+		}
 		c_map->SendCommand(client, "/eks", p->m_iEnemyKillCount);
 
 		break;
@@ -541,7 +549,7 @@ void Trades::req_trade(int client, char * pData)
 
 	case DEF_TRADECONTRIB:
 	{
-		if (index > vec_trade_contrib.size() || index < 0) return;
+		if (index < 0 || (size_t)index >= vec_trade_contrib.size()) return;
 		if (quant < 1 || quant > 20) return;
 
 		if (c_map->_iGetItemSpaceLeft(client) < quant)
@@ -558,6 +566,9 @@ void Trades::req_trade(int client, char * pData)
 			return;
 		}
 
+		p->m_iContribution -= icost;          // cobra ANTES de entregar
+		int iGiven = 0;
+
 		class CItem * pItem;
 		int iItemID, iEraseReq;
 
@@ -567,26 +578,31 @@ void Trades::req_trade(int client, char * pData)
 			if (!c_map->_bInitItemAttr(pItem, vec_trade_contrib[index].itemname))
 			{
 				delete pItem;
-				return;
+				break;
 			}
 
 			if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 			{
 				delete pItem;
-				return;
+				break;
 			}
 
 			c_map->SendItemNotifyMsg(client, CLIENT_NOTIFY_ITEMOBTAINED, pItem, NULL);
+			iGiven++;
 		}
 
-		p->m_iContribution -= icost;
+		if (iGiven < quant)          // devuelve lo que no pudo entregar
+		{
+			p->m_iContribution += vec_trade_contrib[index].contrib * (quant - iGiven);
+			c_map->ShowClientMsg(client, "No puedes cargar mas peso. Solo se cobro lo entregado.");
+		}
 		c_map->SendCommand(client, "/contrib", p->m_iContribution);
 		break;
 	}
 
 	case DEF_TRADECOIN:
 	{
-		if (index > vec_trade_coin.size() || index < 0) return;
+		if (index < 0 || (size_t)index >= vec_trade_coin.size()) return;
 		if (quant < 1 || quant > 20) return;
 
 		string reward = vec_trade_coin[index].itemname;
@@ -680,8 +696,8 @@ void Trades::req_trade(int client, char * pData)
 				return;
 			}
 
-			p->m_iCoins -= icost;
-			c_map->SendCommand(client, "/coins", p->m_iCoins);
+			p->m_iCoins -= icost;          // cobra ANTES de entregar
+			int iGiven = 0;
 
 			class CItem * pItem;
 			int iItemID, iEraseReq;
@@ -692,17 +708,25 @@ void Trades::req_trade(int client, char * pData)
 				if (!c_map->_bInitItemAttr(pItem, vec_trade_coin[index].itemname))
 				{
 					delete pItem;
-					return;
+					break;
 				}
 
 				if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 				{
 					delete pItem;
-					return;
+					break;
 				}
 
 				c_map->SendItemNotifyMsg(client, CLIENT_NOTIFY_ITEMOBTAINED, pItem, NULL);
+				iGiven++;
 			}
+
+			if (iGiven < quant)          // devuelve lo que no pudo entregar
+			{
+				p->m_iCoins += vec_trade_coin[index].coins * (quant - iGiven);
+				c_map->ShowClientMsg(client, "No puedes cargar mas peso. Solo se cobro lo entregado.");
+			}
+			c_map->SendCommand(client, "/coins", p->m_iCoins);
 		}
 				
 		break;
@@ -710,7 +734,7 @@ void Trades::req_trade(int client, char * pData)
 
 	case DEF_TRADEMAJS:
 	{
-		if (index > vec_trade_majs.size() || index < 0) return;
+		if (index < 0 || (size_t)index >= vec_trade_majs.size()) return;
 		if (quant < 1 || quant > 20) return;
 
 		if (c_map->_iGetItemSpaceLeft(client) < quant)
@@ -727,6 +751,9 @@ void Trades::req_trade(int client, char * pData)
 			return;
 		}
 
+		p->m_iGizonItemUpgradeLeft -= icost;          // cobra ANTES de entregar
+		int iGiven = 0;
+
 		class CItem * pItem;
 		int iItemID, iEraseReq;
 
@@ -736,13 +763,13 @@ void Trades::req_trade(int client, char * pData)
 			if (!c_map->_bInitItemAttr(pItem, vec_trade_majs[index].itemname))
 			{
 				delete pItem;
-				return;
+				break;
 			}
 
 			if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 			{
 				delete pItem;
-				return;
+				break;
 			}
 
 			if (string(pItem->m_cName) == "AngelicPandent(STR)" ||
@@ -757,9 +784,14 @@ void Trades::req_trade(int client, char * pData)
 			}
 			
 			c_map->SendItemNotifyMsg(client, CLIENT_NOTIFY_ITEMOBTAINED, pItem, NULL);
+			iGiven++;
 		}
 
-		p->m_iGizonItemUpgradeLeft -= icost;
+		if (iGiven < quant)          // devuelve lo que no pudo entregar
+		{
+			p->m_iGizonItemUpgradeLeft += vec_trade_majs[index].majs * (quant - iGiven);
+			c_map->ShowClientMsg(client, "No puedes cargar mas peso. Solo se cobro lo entregado.");
+		}
 		c_map->SendCommand(client, "/majs", p->m_iGizonItemUpgradeLeft);
 		break;
 	}
@@ -851,6 +883,8 @@ void Trades::getContributionBall(int client, int quant)
 	pItem = new class CItem;
 	if (!c_map->_bInitItemAttr(pItem, itemname))
 	{
+		p->m_iContribution += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/contrib", p->m_iContribution);
 		delete pItem;
 		return;
 	}
@@ -859,6 +893,8 @@ void Trades::getContributionBall(int client, int quant)
 
 	if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 	{
+		p->m_iContribution += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/contrib", p->m_iContribution);
 		delete pItem;
 		return;
 	}
@@ -908,6 +944,8 @@ void Trades::getCoinBall(int client, int quant)
 	pItem = new class CItem;
 	if (!c_map->_bInitItemAttr(pItem, itemname))
 	{
+		p->m_iCoins += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/coins", p->m_iCoins);
 		delete pItem;
 		return;
 	}
@@ -916,6 +954,8 @@ void Trades::getCoinBall(int client, int quant)
 
 	if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 	{
+		p->m_iCoins += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/coins", p->m_iCoins);
 		delete pItem;
 		return;
 	}
@@ -966,6 +1006,8 @@ void Trades::getReputationBall(int client, int quant)
 	pItem = new class CItem;
 	if (!c_map->_bInitItemAttr(pItem, itemname))
 	{
+		p->m_iRating += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/rep", p->m_iRating);
 		delete pItem;
 		return;
 	}
@@ -974,6 +1016,8 @@ void Trades::getReputationBall(int client, int quant)
 
 	if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 	{
+		p->m_iRating += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/rep", p->m_iRating);
 		delete pItem;
 		return;
 	}
@@ -1023,6 +1067,8 @@ void Trades::getMajesticBall(int client, int quant)
 	pItem = new class CItem;
 	if (!c_map->_bInitItemAttr(pItem, itemname))
 	{
+		p->m_iGizonItemUpgradeLeft += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/majs", p->m_iGizonItemUpgradeLeft);
 		delete pItem;
 		return;
 	}
@@ -1031,6 +1077,8 @@ void Trades::getMajesticBall(int client, int quant)
 
 	if (!c_map->_bAddClientItemList(client, pItem, &iEraseReq))
 	{
+		p->m_iGizonItemUpgradeLeft += totalCost;      // devuelve lo cobrado
+		c_map->SendCommand(client, "/majs", p->m_iGizonItemUpgradeLeft);
 		delete pItem;
 		return;
 	}

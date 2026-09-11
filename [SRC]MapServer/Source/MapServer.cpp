@@ -5,6 +5,14 @@
 #include "..\\Header\\QuestList.h"
 #include "..\\Trades.h"
 #include <map>
+#include <vector>
+#include <string>
+
+// Topes de experiencia. m_iExp y m_iExpStock son int (maximo 2.147.483.647):
+// con NPCs de mucha experiencia, Exp * 600 no cabe y daria negativo.
+#define DEF_MAXEXPGANANCIA   1000000000   // lo maximo que suma una sola ganancia
+#define DEF_MAXEXPSTOCK      1500000000   // lo maximo acumulado antes de pasar a m_iExp
+#define DEF_MAXEXPTOTAL      2000000000   // m_iExp nunca pasa de aqui
 
 #include <tchar.h>  
 #include <stdio.h> 
@@ -26,6 +34,7 @@ extern void UpdateConfigList(char* cMsg);
 extern char G_cTxt[512];
 extern char	G_cData50000[50000];
 extern void PutLogHacksFileList(char * cStr); // Listo
+extern void PutLogAtaque(char * cStr); // intentos de tirar el servidor
 extern void PutLogOnlinesFileList(char * cStr);
 extern void PutLogDrops(char * cStr); //lalov9 drops 
 
@@ -618,7 +627,8 @@ void CMapServer::OnClientSocketEvent(UINT message, WPARAM wParam, LPARAM lParam)
 			switch (iRet) {
 				case DEF_XSOCKEVENT_READCOMPLETE:
 					OnClientRead(iClientH);
-					m_pClientList[iClientH]->m_dwTime = timeGetTime();
+					// OnClientRead puede haber desconectado al cliente (paquete malformado)
+					if (m_pClientList[iClientH] != NULL) m_pClientList[iClientH]->m_dwTime = timeGetTime();
 					break;
 
 				case DEF_XSOCKEVENT_BLOCK:
@@ -632,6 +642,13 @@ void CMapServer::OnClientSocketEvent(UINT message, WPARAM wParam, LPARAM lParam)
 					break;
 
 				case DEF_XSOCKEVENT_MSGSIZETOOLARGE:
+					// Tamano de paquete imposible (menor que la cabecera). Se avisa y
+					// despues se desconecta igual que antes (sigue en el case de abajo).
+					{
+						char cMotivo[120];
+						wsprintf(cMotivo, "Paquete con tamano invalido (declara %d bytes)", m_pClientList[iClientH]->m_pXSock->wGetRcvHeaderSize());
+						ReportarAtaque(iClientH, cMotivo);
+					}
 				case DEF_XSOCKEVENT_SOCKETERROR://lalo Socket
 				case DEF_XSOCKEVENT_SOCKETCLOSED:
 
@@ -931,6 +948,22 @@ BOOL CMapServer::bInit()
 	if (!_bDecodeItemConfigFileContents("Configs\\Item2.cfg")) ErrorList("(!!!) STOPPED! Item2 configuration error.");
 	if (!_bDecodeItemConfigFileContents("Configs\\Item3.cfg")) ErrorList("(!!!) STOPPED! Item3 configuration error.");
 	if (!_bDecodeMagicConfigFileContents("Configs\\Magic.cfg")) ErrorList("(!!!) STOPPED! MAGIC configuration error.");
+
+	// Indices que el codigo de magias de NPC da por hechos. Si falta alguno en
+	// Magic.cfg, el servidor cae al desreferenciar NULL cuando un NPC lo lance.
+	{
+		static const int iRequiredMagic[] = { 0, 10, 20, 30, 32, 35, 37, 43, 51, 56, 57, 60,
+			61, 63, 65, 70, 74, 76, 81, 83, 85, 91, 92, 96, 97, 98 };
+		char cMagicChk[160];
+		for (int iM = 0; iM < (int)(sizeof(iRequiredMagic) / sizeof(iRequiredMagic[0])); iM++) {
+			int iIdx = iRequiredMagic[iM];
+			if (iIdx < 0 || iIdx >= DEF_MAXMAGICTYPE || m_pMagicConfigList[iIdx] == NULL) {
+				wsprintf(cMagicChk, "(!!!) Magic.cfg: falta la magia %d - el servidor caera si un NPC la usa", iIdx);
+				PutLogList(cMagicChk);
+				ErrorList(cMagicChk);
+			}
+		}
+	}
 	if (!_bDecodePortionConfigFileContents("Configs\\potion.cfg")) ErrorList("(!!!) STOPPED! POTION configuration error.");
 	if (!_bDecodeBuildItemConfigFileContents("Configs\\builditem.cfg")) ErrorList("(!!!) STOPPED! Build-Item configuration error.");
 	if (!_bDecodeSkillConfigFileContents("Configs\\Skill.cfg")) ErrorList("(!!!) STOPPED! SKILL configuration error.");
@@ -1078,6 +1111,15 @@ void CMapServer::OnClientRead(int iClientH)
 		if (m_pClientList[iClientH] == NULL) return;
 
 		pData = m_pClientList[iClientH]->m_pXSock->pGetRcvDataPointerClient(&dwMsgSize, &cKey); // v1.4
+		if (pData == NULL) {
+			// Cabecera que declara menos de 7 bytes: el cliente normal nunca lo manda.
+			// Es el paquete que antes tumbaba el servidor. Se avisa y se corta la conexion.
+			char cMotivo[120];
+			wsprintf(cMotivo, "Paquete malformado (tamano declarado %d, minimo 7)", m_pClientList[iClientH]->m_pXSock->wGetRcvHeaderSize());
+			ReportarAtaque(iClientH, cMotivo);
+			DeleteClient(iClientH, TRUE, TRUE);
+			return;
+		}
 
 		if (bPutMsgQuene(DEF_MSGFROM_CLIENT, pData, dwMsgSize, iClientH, cKey) == FALSE)
 			ErrorList("@@@@@@ CRITICAL ERROR in MsgQuene 1!!! @@@@@@");
@@ -1088,6 +1130,114 @@ void CMapServer::OnClientRead(int iClientH)
 		ErrorList("Crash Evitado en: OnClientRead");
 	}
 #endif
+}
+
+// ---------------------------------------------------------------------------
+// Deteccion de intentos de tirar el servidor
+//
+// Cuando llega algo que el cliente normal nunca manda (paquete con tamano
+// imposible, indices fuera de rango), se avisa en rojo en la consola y se
+// escribe en ..\ServerLogs\Ataques\Ataques [dd-mm-aaaa].txt con:
+//   - la IP de la conexion
+//   - el personaje y la cuenta de esa conexion, si ya habia entrado
+//   - los demas jugadores conectados ahora mismo desde la misma IP
+//   - los personajes que entraron desde esa IP desde que arranco el servidor
+// ---------------------------------------------------------------------------
+
+// Historial IP -> "Personaje(cuenta)". Solo en memoria: se pierde al reiniciar.
+static std::map<std::string, std::vector<std::string> > G_mapIPPersonajes;
+
+void CMapServer::RegistrarIPPersonaje(int iClientH)
+{
+	char cEntrada[40];
+
+	if ((iClientH <= 0) || (iClientH >= DEF_MAXCLIENTS)) return;
+	if (m_pClientList[iClientH] == NULL) return;
+	if (m_pClientList[iClientH]->m_cIPaddress[0] == 0) return;
+	if (m_pClientList[iClientH]->m_cCharName[0] == 0) return;
+
+	ZeroMemory(cEntrada, sizeof(cEntrada));
+	_snprintf(cEntrada, sizeof(cEntrada) - 1, "%.11s(%.11s)", m_pClientList[iClientH]->m_cCharName, m_pClientList[iClientH]->m_cAccountName);
+
+	// tope de memoria: con 20.000 IPs distintas se empieza de cero
+	if (G_mapIPPersonajes.size() >= 20000) G_mapIPPersonajes.clear();
+
+	std::vector<std::string> & lista = G_mapIPPersonajes[std::string(m_pClientList[iClientH]->m_cIPaddress)];
+	if (std::find(lista.begin(), lista.end(), std::string(cEntrada)) != lista.end()) return;
+	if (lista.size() >= 10) lista.erase(lista.begin());
+	lista.push_back(std::string(cEntrada));
+}
+
+void CMapServer::ReportarAtaque(int iClientH, char * cMotivo)
+{
+	static char  s_cUltimaIP[21] = { 0 };
+	static DWORD s_dwUltimoAviso = 0;
+	static int   s_iOmitidos = 0;
+
+	char  cMsg[1024], cQuien[80], cOtros[400], cHistorial[400], cOmitidos[80], cIP[21];
+	char  cEntrada[40];
+	DWORD dwNow;
+	int   i;
+
+	if ((iClientH <= 0) || (iClientH >= DEF_MAXCLIENTS)) return;
+	if (m_pClientList[iClientH] == NULL) return;
+	if (cMotivo == NULL) return;
+
+	ZeroMemory(cIP, sizeof(cIP));
+	strncpy(cIP, m_pClientList[iClientH]->m_cIPaddress, sizeof(cIP) - 1);
+
+	// Anti-spam: de la misma IP, como mucho un aviso cada 5 segundos
+	dwNow = timeGetTime();
+	if ((strcmp(s_cUltimaIP, cIP) == 0) && ((dwNow - s_dwUltimoAviso) < 5000)) {
+		s_iOmitidos++;
+		return;
+	}
+
+	ZeroMemory(cOmitidos, sizeof(cOmitidos));
+	if (s_iOmitidos > 0) {
+		_snprintf(cOmitidos, sizeof(cOmitidos) - 1, " | +%d intentos anteriores de %s sin mostrar", s_iOmitidos, s_cUltimaIP);
+	}
+	strncpy(s_cUltimaIP, cIP, sizeof(s_cUltimaIP) - 1);
+	s_dwUltimoAviso = dwNow;
+	s_iOmitidos = 0;
+
+	// Quien es esta conexion
+	ZeroMemory(cQuien, sizeof(cQuien));
+	if (m_pClientList[iClientH]->m_cCharName[0] != 0) {
+		_snprintf(cQuien, sizeof(cQuien) - 1, "Personaje %.11s, cuenta %.11s%s", m_pClientList[iClientH]->m_cCharName,
+			m_pClientList[iClientH]->m_cAccountName, (m_pClientList[iClientH]->m_bIsInitComplete == TRUE) ? "" : " (entrando)");
+	}
+	else strcpy(cQuien, "sin login");
+
+	// Otros jugadores conectados ahora desde la misma IP
+	ZeroMemory(cOtros, sizeof(cOtros));
+	for (i = 1; i < DEF_MAXCLIENTS; i++) {
+		if ((i == iClientH) || (m_pClientList[i] == NULL)) continue;
+		if (m_pClientList[i]->m_cCharName[0] == 0) continue;
+		if (strcmp(m_pClientList[i]->m_cIPaddress, cIP) != 0) continue;
+
+		ZeroMemory(cEntrada, sizeof(cEntrada));
+		_snprintf(cEntrada, sizeof(cEntrada) - 1, "%s%.11s(%.11s)", (cOtros[0] != 0) ? ", " : "", m_pClientList[i]->m_cCharName, m_pClientList[i]->m_cAccountName);
+		if (strlen(cOtros) + strlen(cEntrada) < sizeof(cOtros) - 1) strcat(cOtros, cEntrada);
+	}
+	if (cOtros[0] == 0) strcpy(cOtros, "nadie");
+
+	// Personajes que entraron antes desde esa IP
+	ZeroMemory(cHistorial, sizeof(cHistorial));
+	std::map<std::string, std::vector<std::string> >::iterator it = G_mapIPPersonajes.find(std::string(cIP));
+	if (it != G_mapIPPersonajes.end()) {
+		for (size_t k = 0; k < it->second.size(); k++) {
+			if (strlen(cHistorial) + it->second[k].size() + 3 >= sizeof(cHistorial)) break;
+			if (cHistorial[0] != 0) strcat(cHistorial, ", ");
+			strcat(cHistorial, it->second[k].c_str());
+		}
+	}
+	if (cHistorial[0] == 0) strcpy(cHistorial, "ninguno desde que arranco el servidor");
+
+	ZeroMemory(cMsg, sizeof(cMsg));
+	_snprintf(cMsg, sizeof(cMsg) - 1, "%s | IP %s | Conexion <%d>: %s | Conectados con esa IP: %s | Entraron antes desde esa IP: %s%s",
+		cMotivo, cIP, iClientH, cQuien, cOtros, cHistorial, cOmitidos);
+	PutLogAtaque(cMsg);
 }
 
 void CMapServer::DisplayInfo(HDC hdc)
@@ -1179,7 +1329,7 @@ void CMapServer::ClientMotionHandler(int iClientH, char * pData)
 			if ((m_pClientList[iClientH] != NULL) && (m_pClientList[iClientH]->m_iHP <= 0)) ClientKilledHandler(iClientH, NULL, NULL, 1); // v1.4
 			bCheckClientMoveFrequency(iClientH, dwClientTime);
 			//agregado Lalov9
-			//bCheckClientStatLvl(iClientH);
+			bCheckClientStatLvl(iClientH);
 			if (m_pClientList[iClientH] != NULL) {
 				if ((AllVsAll == TRUE) && (strcmp(m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_cName, DEF_EVENTMAP_ALLVSALL) == 0))
 					m_pClientList[iClientH]->ActiveAvA = timeGetTime();
@@ -1191,7 +1341,7 @@ void CMapServer::ClientMotionHandler(int iClientH, char * pData)
 			if (iRet == 1) SendEventToNearClient_TypeA((short)iClientH, DEF_OWNERTYPE_PLAYER, CLIENT_COMMON_EVENT_MOTION, DEF_OBJECTMOVE, NULL, NULL, NULL);
 			if ((m_pClientList[iClientH] != NULL) && (m_pClientList[iClientH]->m_iHP <= 0)) ClientKilledHandler(iClientH, NULL, NULL, 1); // v1.4
 			bCheckClientMoveFrequency(iClientH, dwClientTime);
-			//bCheckClientStatLvl(iClientH);
+			bCheckClientStatLvl(iClientH);
 			if (m_pClientList[iClientH] != NULL) {
 				if ((AllVsAll == TRUE) && (strcmp(m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_cName, DEF_EVENTMAP_ALLVSALL) == 0))
 					m_pClientList[iClientH]->ActiveAvA = timeGetTime();
@@ -1258,7 +1408,7 @@ void CMapServer::ClientMotionHandler(int iClientH, char * pData)
 			else if (iRet == 2) SendObjectMotionRejectMsg(iClientH);
 			//antihack
 			bCheckClientMagicFrequency(iClientH, dwClientTime);
-			//bCheckClientStatLvl(iClientH);
+			bCheckClientStatLvl(iClientH);
 			if (m_pClientList[iClientH] != NULL) {
 				if ((AllVsAll == TRUE) && (strcmp(m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_cName, DEF_EVENTMAP_ALLVSALL) == 0))
 					m_pClientList[iClientH]->ActiveAvA = timeGetTime();
@@ -1346,7 +1496,7 @@ void CMapServer::ClientMotionHandler(int iClientH, char * pData)
 				if ((m_pClientList[iClientH] != NULL) && (m_pClientList[iClientH]->m_iHP <= 0)) ClientKilledHandler(iClientH, NULL, NULL, 1); // v1.4
 				bCheckClientMoveFrequency(iClientH, (wCommand == DEF_OBJECTRUN));
 				//agregado Lalov9
-				//bCheckClientStatLvl(iClientH);
+				bCheckClientStatLvl(iClientH);
 				if (m_pClientList[iClientH] != NULL) {
 					if ((AllVsAll == TRUE) && (strcmp(m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_cName, DEF_EVENTMAP_ALLVSALL) == 0))
 						m_pClientList[iClientH]->ActiveAvA = timeGetTime();
@@ -1358,7 +1508,7 @@ void CMapServer::ClientMotionHandler(int iClientH, char * pData)
 				if (iRet == 1) SendEventToNearClient_TypeA((short)iClientH, DEF_OWNERTYPE_PLAYER, CLIENT_COMMON_EVENT_MOTION, DEF_OBJECTMOVE, NULL, NULL, NULL);
 				if ((m_pClientList[iClientH] != NULL) && (m_pClientList[iClientH]->m_iHP <= 0)) ClientKilledHandler(iClientH, NULL, NULL, 1); // v1.4
 				bCheckClientMoveFrequency(iClientH, (wCommand == DEF_OBJECTRUN));
-				//bCheckClientStatLvl(iClientH);
+				bCheckClientStatLvl(iClientH);
 				if (m_pClientList[iClientH] != NULL) {
 					if ((AllVsAll == TRUE) && (strcmp(m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_cName, DEF_EVENTMAP_ALLVSALL) == 0))
 						m_pClientList[iClientH]->ActiveAvA = timeGetTime();
@@ -1425,7 +1575,7 @@ void CMapServer::ClientMotionHandler(int iClientH, char * pData)
 				else if (iRet == 2) SendObjectMotionRejectMsg(iClientH);
 				//antihack
 				bCheckClientMagicFrequency(iClientH, dwClientTime);
-				//bCheckClientStatLvl(iClientH);
+				bCheckClientStatLvl(iClientH);
 				if (m_pClientList[iClientH] != NULL) {
 					if ((AllVsAll == TRUE) && (strcmp(m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_cName, DEF_EVENTMAP_ALLVSALL) == 0))
 						m_pClientList[iClientH]->ActiveAvA = timeGetTime();
@@ -3630,7 +3780,9 @@ void CMapServer::CheckClientResponseTime()
 
 					if (m_pClientList[i]->IsInMap("dm") && !g_ev.Is(EventID::Deathmatch) || m_pClientList[i]->IsInMap("dm") && !c_dm->is_fighter(m_pClientList[i]->m_cCharName))
 					{
-						if (m_pClientList[i]->IsLocation("aresden"))
+						// m_cSide (1=aresden, 2=elvine) es la ciudadania y no cambia al
+						// entrar al mapa dm; m_cLocation si, por eso todos acababan en elvine.
+						if (m_pClientList[i]->m_cSide != 2)
 						{
 							RequestTeleportHandler(i, "2   ", "aresden", -1, -1);													
 						}
@@ -4112,6 +4264,7 @@ void CMapServer::OnMainLogRead()
 		char * pData, cKey;
 
 		pData = m_pMainLogSock->pGetRcvDataPointer(&dwMsgSize, &cKey);
+		if (pData == NULL) return;
 		if (bPutMsgQuene(DEF_MSGFROM_LOGSERVER, pData, dwMsgSize, NULL, cKey) == FALSE) {
 			ErrorList("@@@@@@ CRITICAL ERROR in MsgQuene 2!!! @@@@@@");
 		}
@@ -4683,6 +4836,7 @@ void CMapServer::InitPlayerData(int iClientH, char * pData, DWORD dwSize)
 		}
 
 		m_pClientList[iClientH]->m_bIsInitComplete = TRUE;
+		RegistrarIPPersonaje(iClientH); // para saber quien era si luego hay un ataque desde esta IP
 		if (m_pClientList[iClientH]->CheckProcess) CheckProcess(iClientH);
 
 		if (m_pClientList[iClientH]->Assasain) SearchAssasainPosition(iClientH);
@@ -4753,7 +4907,10 @@ void CMapServer::InitPlayerData(int iClientH, char * pData, DWORD dwSize)
 			}
 		}
 
-		m_pClientList[iClientH]->m_iMaxRankExp = c_rank->m_iMaxrankexp[m_pClientList[iClientH]->m_sRankLevel];
+		if (m_pClientList[iClientH]->m_sRankLevel >= 0 && m_pClientList[iClientH]->m_sRankLevel < MAXRANKEXP)
+			m_pClientList[iClientH]->m_iMaxRankExp = c_rank->m_iMaxrankexp[m_pClientList[iClientH]->m_sRankLevel];
+		else
+			m_pClientList[iClientH]->m_iMaxRankExp = 0;
 		notify_rankexp(iClientH);
 
 		NotifyRankData(iClientH);
@@ -9731,6 +9888,11 @@ void CMapServer::ChatMsgHandler(int iClientH, char * pData, DWORD dwMsgSize)
 									g_ev.Deactivate(EventID::Deathmatch);
 									PutLogList("Deathmatch finalizado manualmente.");
 								}
+								return;
+							}
+
+							if (memcmp(cp, "/dmek", 5) == 0) {
+								AdminOrder_DmEk(iClientH, cp, dwMsgSize - 21);
 								return;
 							}
 
@@ -20379,6 +20541,8 @@ int CMapServer::iClientMotion_Magic_Handler(int iClientH, short sX, short sY, ch
 		if (m_pClientList[iClientH] == NULL) return 0;
 		if (m_pClientList[iClientH]->m_bIsKilled == TRUE) return 0;
 		if (m_pClientList[iClientH]->m_bIsInitComplete == FALSE) return 0;
+		if (m_pClientList[iClientH]->m_cMapIndex < 0) return 0;
+		if (m_pMapList[m_pClientList[iClientH]->m_cMapIndex] == NULL) return 0;
 
 		if ((sX != m_pClientList[iClientH]->m_sX) || (sY != m_pClientList[iClientH]->m_sY)) return 2;
 
@@ -20457,14 +20621,19 @@ void CMapServer::PlayerMagicHandler(int iClientH, int dX, int dY, short sType, B
 		if (m_pClientList[iClientH] == NULL) return;
 		if (m_pClientList[iClientH]->m_bIsInitComplete == FALSE) return;
 
-		if ((dX < 0) || (dX >= m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_sSizeX) ||
-			(dY < 0) || (dY >= m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_sSizeY)) return;
-		if (m_pMagicConfigList[sType]->m_sIntLimit > (m_pClientList[iClientH]->m_iInt + m_pClientList[iClientH]->m_sRankAddInt + m_pClientList[iClientH]->m_iAngelicInt)) return;
+		if ((sType < 0) || (sType >= DEF_MAXMAGICTYPE)) {
+			char cMotivo[120];
+			wsprintf(cMotivo, "Magia con indice fuera de rango (%d)", (int)sType);
+			ReportarAtaque(iClientH, cMotivo);
+			return;
+		}
+		if (m_pMagicConfigList[sType] == NULL) return;
 		if (m_pClientList[iClientH]->m_cMapIndex < 0) return;
 		if (m_pMapList[m_pClientList[iClientH]->m_cMapIndex] == NULL) return;
 
-		if ((sType < 0) || (sType >= 100))     return;
-		if (m_pMagicConfigList[sType] == NULL) return;
+		if ((dX < 0) || (dX >= m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_sSizeX) ||
+			(dY < 0) || (dY >= m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_sSizeY)) return;
+		if (m_pMagicConfigList[sType]->m_sIntLimit > (m_pClientList[iClientH]->m_iInt + m_pClientList[iClientH]->m_sRankAddInt + m_pClientList[iClientH]->m_iAngelicInt)) return;
 		if ((bItemEffect == FALSE) && (m_pClientList[iClientH]->m_cMagicMastery[sType] != 1)) return;
 		if (m_pMapList[m_pClientList[iClientH]->m_cMapIndex]->m_bIsAttackEnabled == FALSE) return;
 
@@ -26730,36 +26899,55 @@ int CMapServer::_iCalcSkillSSNpoint(int iLevel)
 	return 0;
 }
 
-void CMapServer::rank_operation(int iClientH)
+void CMapServer::rank_operation(int iClientH, int iCantidad)
 {
-	return;
+	// Experiencia de rango: 1 punto por cada majestic ganado al nivel maximo.
+	// iCantidad permite sumar varios de golpe (una muerte puede dar muchos majestics)
+	// y el sobrante pasa al rango siguiente en vez de perderse.
 	auto player = m_pClientList[iClientH];
 	if (!player) return;
+	if (iCantidad <= 0) return;
+	if (player->m_cMapIndex < 0) return;
+	if (m_pMapList[player->m_cMapIndex] == NULL) return;
 
-	if ((player->m_sRankLevel >= 20) && ((memcmp(m_pMapList[player->m_cMapIndex]->m_cName, "areuni", 6) == 0) ||
+	// En areuni y VipMap1 el rango deja de subir a partir de DEF_RANKLIMIT_MAPASFARM (Rank.h)
+	if ((player->m_sRankLevel >= DEF_RANKLIMIT_MAPASFARM) && ((memcmp(m_pMapList[player->m_cMapIndex]->m_cName, "areuni", 6) == 0) ||
 		(memcmp(m_pMapList[player->m_cMapIndex]->m_cName, "VipMap1", 7) == 0))) return;
 
-	player->m_iRankExp++;
-	
-	if (player->m_sRankLevel != 30)//20
+	// En el rango maximo ya no se acumula experiencia de rango
+	if (player->m_sRankLevel >= DEF_MAXRANKLEVEL) return;
+	if (player->m_sRankLevel < 0 || player->m_sRankLevel >= MAXRANKEXP) return;
+
+	BOOL bSubio = FALSE;
+	player->m_iRankExp += iCantidad;
+
+	while (player->m_sRankLevel < DEF_MAXRANKLEVEL)
 	{
 		player->m_iMaxRankExp = c_rank->m_iMaxrankexp[player->m_sRankLevel];
-		if (player->m_iRankExp >= player->m_iMaxRankExp)
-		{
-			player->m_iRankExp = 0;
-			player->m_sRankLevel++;
-			player->m_iRankPoints++;
-			notify_rankup(iClientH);
-			send_objects_data(); 
-		}
+		if (player->m_iMaxRankExp <= 0) break;                  // sin valor en RankSettings.cfg: no sube
+		if (player->m_iRankExp < player->m_iMaxRankExp) break;
+
+		player->m_iRankExp -= player->m_iMaxRankExp;
+		player->m_sRankLevel++;
+		player->m_iRankPoints++;
+		bSubio = TRUE;
 	}
 
+	if (player->m_sRankLevel >= DEF_MAXRANKLEVEL) {
+		player->m_iRankExp = 0;
+		player->m_iMaxRankExp = 0;
+	}
+	else player->m_iMaxRankExp = c_rank->m_iMaxrankexp[player->m_sRankLevel];
+
+	if (bSubio) {
+		notify_rankup(iClientH);
+		send_objects_data();
+	}
 	notify_rankexp(iClientH);
 }
 
 void CMapServer::notify_rankup(int iClientH)
 {
-	return;
 	auto player = m_pClientList[iClientH];
 	if (!player) return;
 
@@ -26777,7 +26965,6 @@ void CMapServer::notify_rankup(int iClientH)
 
 void CMapServer::notify_rankexp(int iClientH)
 {
-	return;
 	auto player = m_pClientList[iClientH];
 	if (!player) return;
 
@@ -26804,12 +26991,21 @@ BOOL CMapServer::bCheckLevelUp(int iClientH) // Sobrepaso de lvl fix.
 
 		if (m_pClientList[iClientH]->m_iLevel >= DEF_PLAYERMAXLEVEL) {
 			if (m_pClientList[iClientH]->m_iExp >= m_iLevelExpTable[DEF_PLAYERMAXLEVEL + 1]) {
-				m_pClientList[iClientH]->m_iExp = m_iLevelExpTable[DEF_PLAYERMAXLEVEL];
+				// Un majestic por cada tramo completo de experiencia (lo que costaria pasar
+				// de 200 a 201). Antes daba 1 solo por ganancia aunque sobrara muchisima
+				// experiencia, y el resto se tiraba. Lo que no llega a un tramo se conserva.
+				int iTramo = m_iLevelExpTable[DEF_PLAYERMAXLEVEL + 1] - m_iLevelExpTable[DEF_PLAYERMAXLEVEL];
+				if (iTramo <= 0) iTramo = 1;
+				int iSobrante = m_pClientList[iClientH]->m_iExp - m_iLevelExpTable[DEF_PLAYERMAXLEVEL];
+				int iMajs = iSobrante / iTramo;
+				if (iMajs < 1) iMajs = 1;
+
+				m_pClientList[iClientH]->m_iExp = m_iLevelExpTable[DEF_PLAYERMAXLEVEL] + (iSobrante % iTramo);
 				SendNotifyMsg(NULL, iClientH, CLIENT_NOTIFY_EXP, NULL, NULL, NULL, NULL);
-				m_pClientList[iClientH]->m_iGizonItemUpgradeLeft++;
-				
-				//rank system hbarg
-				rank_operation(iClientH);
+				m_pClientList[iClientH]->m_iGizonItemUpgradeLeft += iMajs;
+
+				//rank system hbarg: 1 punto de experiencia de rango por majestic
+				rank_operation(iClientH, iMajs);
 
 				if (m_pClientList[iClientH]->m_iGizonItemUpgradeLeft > DEF_MAXGIZONPOINT) m_pClientList[iClientH]->m_iGizonItemUpgradeLeft = DEF_MAXGIZONPOINT; // adamas
 				SendNotifyMsg(NULL, iClientH, CLIENT_NOTIFY_GIZONITEMUPGRADELEFT, NULL, NULL, NULL, NULL);
@@ -27004,6 +27200,36 @@ void CMapServer::LevelUpSettingsHandler(int iClientH, char * pData, DWORD dwMsgS
 
 			m_pClientList[iClientH]->m_iLU_Pool = m_pClientList[iClientH]->m_iLU_Pool - (cStr + cVit + cDex + cInt + cMag + cChar);
 		}
+		else {
+			// Cambio de stats pagando majestics (1 majestic por cada 3 puntos que se quitan).
+			// Antes el servidor aceptaba cualquier cifra que mandara el cliente: con un
+			// cliente modificado se podian subir stats sin limite pagando 1 majestic.
+			short sCambio[6] = { cStr, cVit, cDex, cInt, cMag, cChar };
+			int iActual[6] = { m_pClientList[iClientH]->m_iStr, m_pClientList[iClientH]->m_iVit, m_pClientList[iClientH]->m_iDex,
+				m_pClientList[iClientH]->m_iInt, m_pClientList[iClientH]->m_iMag, m_pClientList[iClientH]->m_iCharisma };
+			int iQuitados = 0, iPuestos = 0, iTotalActual = 0, k;
+			int iMaxStatsMaj = ((m_pClientList[iClientH]->m_iLevel - 1) * 3) + 70 + m_pClientList[iClientH]->getRebirthStats();
+
+			for (k = 0; k < 6; k++) {
+				if ((iActual[k] + sCambio[k] < 10) || (iActual[k] + sCambio[k] > DEF_CHARPOINTLIMIT)) {
+					SendNotifyMsg(NULL, iClientH, CLIENT_NOTIFY_SETTING_FAILED, NULL, NULL, NULL, NULL);
+					return;
+				}
+				if (sCambio[k] < 0) iQuitados -= sCambio[k];
+				else iPuestos += sCambio[k];
+				iTotalActual += iActual[k];
+			}
+
+			if ((TempMajestic < 0) || (TempMajestic > m_pClientList[iClientH]->m_iGizonItemUpgradeLeft) ||
+				(iQuitados > TempMajestic * 3) ||
+				((iTotalActual + iPuestos - iQuitados) > iMaxStatsMaj)) {
+				wsprintf(G_cTxt, "HACK-MAJESTIC-STATS - Character(%s) IP(%s) majestics %d, quita %d, pone %d",
+					m_pClientList[iClientH]->m_cCharName, m_pClientList[iClientH]->m_cIPaddress, (int)TempMajestic, iQuitados, iPuestos);
+				PutLogHacksFileList(G_cTxt);
+				SendNotifyMsg(NULL, iClientH, CLIENT_NOTIFY_SETTING_FAILED, NULL, NULL, NULL, NULL);
+				return;
+			}
+		}
 		m_pClientList[iClientH]->m_iStr += cStr;
 		m_pClientList[iClientH]->m_iVit += cVit;
 		m_pClientList[iClientH]->m_iDex += cDex;
@@ -27015,8 +27241,11 @@ void CMapServer::LevelUpSettingsHandler(int iClientH, char * pData, DWORD dwMsgS
 			//Calculo los m_iLU_Pool restantes
 			iTotalSetting = m_pClientList[iClientH]->m_iStr + m_pClientList[iClientH]->m_iDex + m_pClientList[iClientH]->m_iVit +
 				m_pClientList[iClientH]->m_iInt + m_pClientList[iClientH]->m_iMag + m_pClientList[iClientH]->m_iCharisma;
-			if (iTotalSetting + m_pClientList[iClientH]->m_iLU_Pool - 3 < ((m_pClientList[iClientH]->m_iLevel - 1) * 3 + 70))
-				m_pClientList[iClientH]->m_iLU_Pool = 3 + (m_pClientList[iClientH]->m_iLevel - 1) * 3 + 70 - iTotalSetting;
+			// Los puntos libres se recalculan con el tope real (nivel + rebirth); antes no contaba el rebirth
+			{
+				int iMaxConRebirth = ((m_pClientList[iClientH]->m_iLevel - 1) * 3) + 70 + m_pClientList[iClientH]->getRebirthStats();
+				m_pClientList[iClientH]->m_iLU_Pool = 3 + iMaxConRebirth - iTotalSetting;
+			}
 
 			//Actualizo los majestics :P
 			m_pClientList[iClientH]->m_iGizonItemUpgradeLeft -= TempMajestic;
@@ -29980,18 +30209,23 @@ void CMapServer::UseItemHandler(int iClientH, short sItemIndex, short dX, short 
 				case DEF_ITEMEFFECTTYPE_RANKUPDIEZ:
 					if (m_pClientList[iClientH] == NULL) return;
 
-					if ((m_pClientList[iClientH]->m_sRankLevel >= 0) && (m_pClientList[iClientH]->m_sRankLevel < 10))
+					if ((m_pClientList[iClientH]->m_sRankLevel >= 0) && (m_pClientList[iClientH]->m_sRankLevel < DEF_RANKTICKET_TOPE1))
 					{
 						m_pClientList[iClientH]->m_iRankExp = 0;
 						m_pClientList[iClientH]->m_sRankLevel++;
 						m_pClientList[iClientH]->m_iRankPoints++;
+						// refresca el tope de exp del nuevo rango para que la barra no quede desfasada
+						if (m_pClientList[iClientH]->m_sRankLevel < MAXRANKEXP)
+							m_pClientList[iClientH]->m_iMaxRankExp = c_rank->m_iMaxrankexp[m_pClientList[iClientH]->m_sRankLevel];
 						notify_rankup(iClientH);
 						send_objects_data();
 						notify_rankexp(iClientH);
 					}
 					else
 					{
-						ShowClientMsg(iClientH, "Use this ticket to increase Rank between lvl 0 and 10!");
+						char cTicketMsg[100];
+						wsprintf(cTicketMsg, "Use this ticket to increase Rank between lvl 0 and %d!", DEF_RANKTICKET_TOPE1);
+						ShowClientMsg(iClientH, cTicketMsg);
 						return;
 					}
 					break;
@@ -29999,18 +30233,23 @@ void CMapServer::UseItemHandler(int iClientH, short sItemIndex, short dX, short 
 				case DEF_ITEMEFFECTTYPE_RANKUPVEINTE:
 					if (m_pClientList[iClientH] == NULL) return;
 
-					if ((m_pClientList[iClientH]->m_sRankLevel >= 0) && (m_pClientList[iClientH]->m_sRankLevel < 20))
+					if ((m_pClientList[iClientH]->m_sRankLevel >= 0) && (m_pClientList[iClientH]->m_sRankLevel < DEF_RANKTICKET_TOPE2))
 					{
 						m_pClientList[iClientH]->m_iRankExp = 0;
 						m_pClientList[iClientH]->m_sRankLevel++;
 						m_pClientList[iClientH]->m_iRankPoints++;
+						// refresca el tope de exp del nuevo rango para que la barra no quede desfasada
+						if (m_pClientList[iClientH]->m_sRankLevel < MAXRANKEXP)
+							m_pClientList[iClientH]->m_iMaxRankExp = c_rank->m_iMaxrankexp[m_pClientList[iClientH]->m_sRankLevel];
 						notify_rankup(iClientH);
 						send_objects_data();
 						notify_rankexp(iClientH);
 					}
 					else
 					{
-						ShowClientMsg(iClientH, "Use this ticket to increase Rank between lvl 0 and 20!");
+						char cTicketMsg[100];
+						wsprintf(cTicketMsg, "Use this ticket to increase Rank between lvl 0 and %d!", DEF_RANKTICKET_TOPE2);
+						ShowClientMsg(iClientH, cTicketMsg);
 						return;
 					}
 					break;
@@ -30018,18 +30257,23 @@ void CMapServer::UseItemHandler(int iClientH, short sItemIndex, short dX, short 
 				case DEF_ITEMEFFECTTYPE_RANKUPMAX:
 					if (m_pClientList[iClientH] == NULL) return;
 
-					if ((m_pClientList[iClientH]->m_sRankLevel >= 0) && (m_pClientList[iClientH]->m_sRankLevel < 30))
+					if ((m_pClientList[iClientH]->m_sRankLevel >= 0) && (m_pClientList[iClientH]->m_sRankLevel < DEF_MAXRANKLEVEL))
 					{
 						m_pClientList[iClientH]->m_iRankExp = 0;
 						m_pClientList[iClientH]->m_sRankLevel++;
 						m_pClientList[iClientH]->m_iRankPoints++;
+						// refresca el tope de exp del nuevo rango para que la barra no quede desfasada
+						if (m_pClientList[iClientH]->m_sRankLevel < MAXRANKEXP)
+							m_pClientList[iClientH]->m_iMaxRankExp = c_rank->m_iMaxrankexp[m_pClientList[iClientH]->m_sRankLevel];
 						notify_rankup(iClientH);
 						send_objects_data();
 						notify_rankexp(iClientH);
 					}
 					else
 					{
-						ShowClientMsg(iClientH, "Use this ticket to increase Rank between lvl 0 and 30!.");
+						char cTicketMsg[100];
+						wsprintf(cTicketMsg, "Use this ticket to increase Rank between lvl 0 and %d!", DEF_MAXRANKLEVEL);
+						ShowClientMsg(iClientH, cTicketMsg);
 						return;
 					}
 					break;
@@ -30136,10 +30380,10 @@ void CMapServer::UseItemHandler(int iClientH, short sItemIndex, short dX, short 
 				case DEF_ITEMEFFECTTYPE_ADDCOINS:
 					iMax = 3000000;//
 					if (DEF_ITEMEFFECTTYPE_CONTRIBUTION == m_pClientList[iClientH]->m_pItemList[sItemIndex]->m_sItemEffectType) {
-						if (m_pClientList[iClientH]->m_iContribution > iMax) return;
+						if (m_pClientList[iClientH]->m_iContribution >= iMax) return;
 					}
 					if (DEF_ITEMEFFECTTYPE_ADDCOINS == m_pClientList[iClientH]->m_pItemList[sItemIndex]->m_sItemEffectType) {
-						if (m_pClientList[iClientH]->m_iCoins > iMax) return;
+						if (m_pClientList[iClientH]->m_iCoins >= iMax) return;
 					}
 
 					Cbs = 5;
@@ -35938,7 +36182,13 @@ void CMapServer::CalcExpStock(int iClientH)
 			return;
 		}
 
-		m_pClientList[iClientH]->m_iExp += m_pClientList[iClientH]->m_iExpStock;
+		// m_iExp es int: se satura en vez de desbordar a negativo
+		__int64 iNuevaExp = (__int64)m_pClientList[iClientH]->m_iExp + (__int64)m_pClientList[iClientH]->m_iExpStock;
+		if (iNuevaExp > DEF_MAXEXPTOTAL) iNuevaExp = DEF_MAXEXPTOTAL;
+		m_pClientList[iClientH]->m_iExp = (int)iNuevaExp;
+
+		if (((__int64)m_pClientList[iClientH]->m_iAutoExpAmount + (__int64)m_pClientList[iClientH]->m_iExpStock) > DEF_MAXEXPTOTAL)
+			m_pClientList[iClientH]->m_iAutoExpAmount = 0;
 		m_pClientList[iClientH]->m_iAutoExpAmount += m_pClientList[iClientH]->m_iExpStock;
 		m_pClientList[iClientH]->m_iExpStock = 0;
 
@@ -35948,6 +36198,11 @@ void CMapServer::CalcExpStock(int iClientH)
 		}
 
 		bIsLevelUp = bCheckLevelUp(iClientH);
+
+		// Si de una sola ganancia llego al nivel maximo, lo que sobra se convierte en majestics
+		if ((m_pClientList[iClientH] != NULL) && (m_pClientList[iClientH]->m_iLevel >= DEF_PLAYERMAXLEVEL) &&
+			(m_pClientList[iClientH]->m_iExp >= m_iLevelExpTable[DEF_PLAYERMAXLEVEL + 1]))
+			bCheckLevelUp(iClientH);
 
 		if ((bIsLevelUp == TRUE) && (m_pClientList[iClientH]->m_iLevel <= 5)) {
 			pItem = new class CItem;
@@ -37368,6 +37623,53 @@ void CMapServer::AdminOrder_Polymorph(int iClientH, char *pData, DWORD dwMsgSize
 	}
 	catch (...) {
 		ErrorList("Crash Evitado en: AdminOrder_Polymorph");
+	}
+#endif
+}
+
+void CMapServer::AdminOrder_DmEk(int iClientH, char *pData, DWORD dwMsgSize)
+{
+#ifdef DEF_DEBUG
+	try {
+#endif
+		char   seps[] = "= \t\n";
+		char   * token, cBuff[256];
+		class  CStrTok * pStrTok;
+
+		if (m_pClientList[iClientH] == NULL) return;
+		if (c_dm == NULL) return;
+		if ((int)dwMsgSize <= 0) return;
+
+		ZeroMemory(cBuff, sizeof(cBuff));
+		memcpy_secure(cBuff, pData, dwMsgSize);
+
+		pStrTok = new class CStrTok(cBuff, seps);
+		token = pStrTok->pGet();   // "/dmek"
+		token = pStrTok->pGet();   // el numero
+
+		if (token == NULL) {
+			// sin argumento: solo consulta el valor actual
+			wsprintf(G_cTxt, "Deathmatch: %d EK por kill.", c_dm->get_ek_per_kill());
+			ShowClientMsg(iClientH, G_cTxt);
+			delete pStrTok;
+			return;
+		}
+
+		int iEk = atoi(token);
+		if (iEk < 0)    iEk = 0;
+		if (iEk > 1000) iEk = 1000;
+
+		c_dm->set_ek_per_kill(iEk);
+
+		wsprintf(G_cTxt, "Deathmatch: ahora son %d EK por kill.", c_dm->get_ek_per_kill());
+		ShowClientMsg(iClientH, G_cTxt);
+		PutLogList(G_cTxt);
+
+		delete pStrTok;
+#ifdef DEF_DEBUG
+	}
+	catch (...) {
+		ErrorList("Crash Evitado en: AdminOrder_DmEk");
 	}
 #endif
 }
@@ -41545,6 +41847,7 @@ void CMapServer::OnSubLogRead(int iIndex)
 		char * pData, cKey;
 
 		pData = m_pSubLogSock[iIndex]->pGetRcvDataPointer(&dwMsgSize, &cKey);
+		if (pData == NULL) return;
 
 		if (bPutMsgQuene(DEF_MSGFROM_LOGSERVER, pData, dwMsgSize, NULL, cKey) == FALSE) {
 			ErrorList("@@@@@@ CRITICAL ERROR in MsgQuene 3!!! @@@@@@");
@@ -46501,6 +46804,7 @@ void CMapServer::GetExp(int iClientH, int iExp, BOOL bIsAttackerOwn)
 			dV2 = dV1 * 0.025f;
 			dV3 = (double)iExp;
 			dV1 = (dV2 + 1.025f)*dV3;
+			if (dV1 > (double)DEF_MAXEXPGANANCIA) dV1 = (double)DEF_MAXEXPGANANCIA; // no desbordar el int
 			iExp = (int)dV1;
 		}
 
@@ -46542,7 +46846,7 @@ void CMapServer::GetExp(int iClientH, int iExp, BOOL bIsAttackerOwn)
 							if (m_pClientList[iH]->m_sRebirthStatus == 1) continue;
 							if (m_pClientList[iH]->m_iCheckCount > 39) continue;
 							//Exp gain based on lvl
-							if ((m_pClientList[iH]->m_iStatus & 0x10000) != 0) iUnitValue *= 3;
+							if ((m_pClientList[iH]->m_iStatus & 0x10000) != 0) iUnitValue = (iUnitValue > (DEF_MAXEXPGANANCIA / 3)) ? DEF_MAXEXPGANANCIA : (iUnitValue * 3);
 							MultiplicadorExp(iH, iUnitValue);
 						}
 					}
@@ -46566,12 +46870,12 @@ void CMapServer::GetExp(int iClientH, int iExp, BOOL bIsAttackerOwn)
 				}
 			}
 			else {
-				if ((m_pClientList[iClientH]->m_iStatus & 0x10000) != 0) iExp *= 3;
+				if ((m_pClientList[iClientH]->m_iStatus & 0x10000) != 0) iExp = (iExp > (DEF_MAXEXPGANANCIA / 3)) ? DEF_MAXEXPGANANCIA : (iExp * 3);
 				MultiplicadorExp(iClientH, iExp);
 			}
 		}
 		else {
-			if ((m_pClientList[iClientH]->m_iStatus & 0x10000) != 0) iExp *= 3;
+			if ((m_pClientList[iClientH]->m_iStatus & 0x10000) != 0) iExp = (iExp > (DEF_MAXEXPGANANCIA / 3)) ? DEF_MAXEXPGANANCIA : (iExp * 3);
 			MultiplicadorExp(iClientH, iExp);
 		}
 		if (m_pClientList[iClientH]->m_iLevel >= DEF_PLAYERMAXLEVEL && m_pClientList[iClientH]->m_iExp < m_iLevelExpTable[DEF_PLAYERMAXLEVEL]) {
@@ -47955,34 +48259,42 @@ void CMapServer::bCheckClientMoveFrequency(int iClientH, DWORD dwClientTime)
 //chequeo lvl y stats Lalov9
 BOOL CMapServer::bCheckClientStatLvl(int iClientH)
 {
-	return FALSE;
 #ifdef DEF_DEBUG
 	try {
 #endif
-				
-		short cStr, cVit, cDex, cInt, cMag, cChar;
 		int iTotalSetting = 0;
-		//m_iAdminUserLevel
-		if (m_pClientList[iClientH]->m_sRebirthEnabled == 1) return FALSE;
+		int iMaxStats = 0;
+		char cHackMsg[256];
 
+		// Primero el NULL: los llamantes pueden haber borrado al cliente justo antes
 		if (m_pClientList[iClientH] == NULL) return FALSE;
-	//	if (m_pClientList[iClientH]->m_iAdminUserLevel >= 1) return FALSE;
-		
+		if (m_pClientList[iClientH]->m_bIsInitComplete == FALSE) return FALSE;
+		if (m_pClientList[iClientH]->m_iAdminUserLevel >= 1) return FALSE;
+
+		// Solo cuentan los stats repartidos (m_iStr...). Los bonos de rango (m_sRankAdd*)
+		// y angelic (m_iAngelic*) viven aparte y no entran en esta suma.
 		iTotalSetting = m_pClientList[iClientH]->m_iStr + m_pClientList[iClientH]->m_iDex + m_pClientList[iClientH]->m_iVit +
 			m_pClientList[iClientH]->m_iInt + m_pClientList[iClientH]->m_iMag + m_pClientList[iClientH]->m_iCharisma;
 
-	//	if (iTotalSetting > ((m_pClientList[iClientH]->m_iLevel - 1) * 3 + 70)) {
-		if ((iTotalSetting > ((m_pClientList[iClientH]->m_iLevel - 1) * 3 + 70)) && (m_pClientList[iClientH]->m_iAdminUserLevel < 1)) {
-			wsprintf(G_cTxt, "HACK-STATS-MOVE - Character(%s)!", m_pClientList[iClientH]->m_cCharName);
-			PutLogHacksFileList(G_cTxt);
+		// Mismo tope que usa el reparto de puntos: nivel + puntos de rebirth
+		iMaxStats = ((m_pClientList[iClientH]->m_iLevel - 1) * 3) + 70 + m_pClientList[iClientH]->getRebirthStats();
+
+		if (iTotalSetting > iMaxStats) {
+			_snprintf(cHackMsg, sizeof(cHackMsg) - 1, "HACK-STATS-MOVE - Character(%s) IP(%s) stats %d / max %d (nivel %d, rebirth %d)",
+				m_pClientList[iClientH]->m_cCharName, m_pClientList[iClientH]->m_cIPaddress, iTotalSetting, iMaxStats,
+				m_pClientList[iClientH]->m_iLevel, m_pClientList[iClientH]->m_iRebirthLevel);
+			cHackMsg[sizeof(cHackMsg) - 1] = 0;
+			PutLogHacksFileList(cHackMsg);
 			DeleteClient(iClientH, TRUE, TRUE);
 			return FALSE;
 		}
 
-	//	if ((m_pClientList[iClientH]->m_iLevel) > 200){
-		if (((m_pClientList[iClientH]->m_iLevel) > m_iPlayerMaxLevel) && (m_pClientList[iClientH]->m_iAdminUserLevel < 1)) {
-			wsprintf(G_cTxt, "HACK-LEVEL-MOVE - Character(%s)!", m_pClientList[iClientH]->m_cCharName);
-			PutLogHacksFileList(G_cTxt);
+		if (m_pClientList[iClientH]->m_iLevel > m_iPlayerMaxLevel) {
+			_snprintf(cHackMsg, sizeof(cHackMsg) - 1, "HACK-LEVEL-MOVE - Character(%s) IP(%s) nivel %d / max %d",
+				m_pClientList[iClientH]->m_cCharName, m_pClientList[iClientH]->m_cIPaddress,
+				m_pClientList[iClientH]->m_iLevel, m_iPlayerMaxLevel);
+			cHackMsg[sizeof(cHackMsg) - 1] = 0;
+			PutLogHacksFileList(cHackMsg);
 			DeleteClient(iClientH, TRUE, TRUE);
 			return FALSE;
 		}
@@ -51249,13 +51561,16 @@ void CMapServer::MultiplicadorExp(WORD Client, DWORD Exp)
 #ifdef DEF_DEBUG
 	try {
 #endif
-		if (m_pClientList[Client]->m_iLevel <= 20)			Exp *= 600;//50 medium
-		else if (m_pClientList[Client]->m_iLevel <= 60)		Exp *= 600;//30
-		else if (m_pClientList[Client]->m_iLevel <= 100)	Exp *= 600;//50
-		else if (m_pClientList[Client]->m_iLevel <= 140)	Exp *= 600;//50
-		else if (m_pClientList[Client]->m_iLevel <= 160)	Exp *= 600;//50
-		else if (m_pClientList[Client]->m_iLevel <= DEF_PLAYERMAXLEVEL)	Exp *= 600;
-		else if (m_pClientList[Client]->m_iLevel >= DEF_PLAYERMAXLEVEL) 	Exp *= 600;
+		// Todo en double: Exp * 600 no cabe en 32 bits con NPCs de mucha experiencia
+		double dExp = (double)Exp;
+
+		if (m_pClientList[Client]->m_iLevel <= 20)			dExp *= 600.0;//50 medium
+		else if (m_pClientList[Client]->m_iLevel <= 60)		dExp *= 600.0;//30
+		else if (m_pClientList[Client]->m_iLevel <= 100)	dExp *= 600.0;//50
+		else if (m_pClientList[Client]->m_iLevel <= 140)	dExp *= 600.0;//50
+		else if (m_pClientList[Client]->m_iLevel <= 160)	dExp *= 600.0;//50
+		else if (m_pClientList[Client]->m_iLevel <= DEF_PLAYERMAXLEVEL)	dExp *= 600.0;
+		else if (m_pClientList[Client]->m_iLevel >= DEF_PLAYERMAXLEVEL) 	dExp *= 600.0;
 
 		if (p->m_sRebirthStatus == 1 && p->m_iLevel != DEF_PLAYERMAXLEVEL && p->m_iRebirthLevel != 0)
 		{
@@ -51264,10 +51579,16 @@ void CMapServer::MultiplicadorExp(WORD Client, DWORD Exp)
 				rebirthMultiplier = pow(0.85f, p->m_iRebirthLevel);
 			}
 
-			Exp *= rebirthMultiplier;
+			dExp *= rebirthMultiplier;
 		}
-		
-		p->m_iExpStock += Exp;
+
+		// Se satura en vez de desbordar a negativo
+		if (dExp > (double)DEF_MAXEXPGANANCIA) dExp = (double)DEF_MAXEXPGANANCIA;
+		if (dExp < 0.0) dExp = 0.0;
+
+		__int64 iNuevoStock = (__int64)p->m_iExpStock + (__int64)dExp;
+		if (iNuevoStock > DEF_MAXEXPSTOCK) iNuevoStock = DEF_MAXEXPSTOCK;
+		p->m_iExpStock = (int)iNuevoStock;
 #ifdef DEF_DEBUG
 	}
 	catch (...) {
@@ -67679,6 +68000,7 @@ void CMapServer::send_objects_data()
 		u.m_sSide = tmpside;
 		u.iLevel = pi->m_iLevel;
 		u.iRebirthLevel = pi->m_iRebirthLevel;
+		u.m_sRankLevel  = pi->m_sRankLevel;
 	
 		vObjects.push_back(u);
 	}
@@ -67715,11 +68037,12 @@ void CMapServer::SendObjectsData(int client)
 		Push(cp, vObjects[i].m_sSide);
 		Push(cp, vObjects[i].iLevel);
 		Push(cp, vObjects[i].iRebirthLevel);
+		Push(cp, vObjects[i].m_sRankLevel);
 	}
 
 	m_pClientList[client]->m_pXSock->iSendMsg(cData, cp - cData);
 
-	delete(cData);
+	delete [] cData;
 }
 
 
@@ -67744,6 +68067,11 @@ void  CMapServer::NotifyRankData(int client)
 	Push(cp, p->m_iRankExp);
 	
 	m_pClientList[client]->m_pXSock->iSendMsg(data, sizeof(data));
+
+	// El cliente necesita tambien el tope de experiencia del rango para dibujar la barra
+	if ((p->m_sRankLevel >= 0) && (p->m_sRankLevel < DEF_MAXRANKLEVEL))
+		p->m_iMaxRankExp = c_rank->m_iMaxrankexp[p->m_sRankLevel];
+	notify_rankexp(client);
 }
 
 
@@ -68251,7 +68579,13 @@ void CMapServer::handleEnchantingExtract(int client, char* data)
 	if (!p) return;
 
 	Pop(data, count);
-	if (count == 0) return;
+	if (count < 0 || count > DEF_MAXITEMS) {
+		char cMotivo[120];
+		wsprintf(cMotivo, "Enchant extract con cantidad invalida (%d)", count);
+		ReportarAtaque(client, cMotivo);
+		return;
+	}
+	if (count < 1) return;
 
 	// Variables acumulativas para shards y fragments
 	std::map<short, int> shardTotals;
@@ -68262,6 +68596,12 @@ void CMapServer::handleEnchantingExtract(int client, char* data)
 		bool rem = false;
 		int itemIndex = -1;
 		Pop(data, itemIndex);
+		if (itemIndex < 0 || itemIndex >= DEF_MAXITEMS) {
+			char cMotivo[120];
+			wsprintf(cMotivo, "Enchant extract con indice de item invalido (%d)", itemIndex);
+			ReportarAtaque(client, cMotivo);
+			continue;
+		}
 
 		auto sourceItem = p->m_pItemList[itemIndex];
 		if (!sourceItem) continue;
@@ -68464,6 +68804,13 @@ void CMapServer::handleEnchantingUpgrade(int client, char* data)
 	Pop(data, m_sDestItem);
 	Pop(data, m_sSelType);
 	Pop(data, m_sType);
+
+	if (m_sDestItem < 0 || m_sDestItem >= DEF_MAXITEMS) {
+		char cMotivo[120];
+		wsprintf(cMotivo, "Enchant upgrade con indice de item invalido (%d)", (int)m_sDestItem);
+		ReportarAtaque(client, cMotivo);
+		return;
+	}
 
 	auto& destItem = p->m_pItemList[m_sDestItem];
 	if (!destItem) return;
@@ -68761,10 +69108,13 @@ void CMapServer::requestRebirth(int client)
 	int cost = player->m_iRebirthLevel * 2500;
 	
 	if (player->m_sRebirthEnabled == 1) return;
+	if (player->m_sRebirthStatus == 1) return;
 	
 	if (player->m_iLevel != DEF_PLAYERMAXLEVEL)
 	{
-		ShowClientMsg(client, "You need to be level %d to be reborn!");
+		char notice[100];
+		wsprintf(notice, "You need to be level %d to be reborn!", DEF_PLAYERMAXLEVEL);
+		ShowClientMsg(client, notice);
 		return;
 	}
 
@@ -68878,7 +69228,6 @@ void CMapServer::switchRebirth(int client)
 
 	if (player->m_iLevel >= 1 && player->m_iLevel <= m_iPlayerMaxLevel - 1 && player->m_sRebirthStatus == 1 && player->m_sRebirthEnabled == 1)
 	{
-		int goldcost = 10000;
 
 		if (dwGetItemCount(client, "Gold") < goldcost)
 		{
@@ -68901,7 +69250,6 @@ void CMapServer::switchRebirth(int client)
 
 		notifyLevelChange(client);
 
-		calcStatsPoints(client);
 
 		m_pClientList[client]->m_iNextLevelExp = m_iLevelExpTable[m_pClientList[client]->m_iLevel + 1];
 
@@ -68933,7 +69281,6 @@ void CMapServer::switchRebirth(int client)
 
 		notifyLevelChange(client);
 
-		calcStatsPoints(client);
 
 		m_pClientList[client]->m_iNextLevelExp = m_iLevelExpTable[m_pClientList[client]->m_iLevel + 1];
 

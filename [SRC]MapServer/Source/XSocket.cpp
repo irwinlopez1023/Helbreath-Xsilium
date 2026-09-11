@@ -45,19 +45,19 @@ XSocket::~XSocket()
 {
  register int i;
 	
-	if (m_pRcvBuffer != NULL) delete m_pRcvBuffer;
-	if (m_pSndBuffer != NULL) delete m_pSndBuffer;
+	if (m_pRcvBuffer != NULL) delete [] m_pRcvBuffer;
+	if (m_pSndBuffer != NULL) delete [] m_pSndBuffer;
 
 	for (i = 0; i < DEF_XSOCKBLOCKLIMIT; i++)
-		if (m_pUnsentDataList[i] != NULL) delete m_pUnsentDataList[i];
+		if (m_pUnsentDataList[i] != NULL) delete [] m_pUnsentDataList[i];
 
 	_CloseConn(); 
 }
 
 BOOL XSocket::bInitBufferSize(DWORD dwBufferSize)
 {
-	if (m_pRcvBuffer != NULL) delete m_pRcvBuffer;
-	if (m_pSndBuffer != NULL) delete m_pSndBuffer;
+	if (m_pRcvBuffer != NULL) delete [] m_pRcvBuffer;
+	if (m_pSndBuffer != NULL) delete [] m_pSndBuffer;
 
 	m_pRcvBuffer = new char[dwBufferSize+8];
 	if (m_pRcvBuffer == NULL) return FALSE;
@@ -353,7 +353,7 @@ int XSocket::_iSendUnsentData()
 		iRet = _iSend_ForInternalUse(m_pUnsentDataList[m_sHead], m_iUnsentDataSize[m_sHead]);
 
 		if (iRet == m_iUnsentDataSize[m_sHead]) {
-			delete m_pUnsentDataList[m_sHead];
+			delete [] m_pUnsentDataList[m_sHead];
 			m_pUnsentDataList[m_sHead] = NULL;
 			m_iUnsentDataSize[m_sHead] = 0;
 			m_sHead++;
@@ -366,7 +366,7 @@ int XSocket::_iSendUnsentData()
 			pTemp = new char[m_iUnsentDataSize[m_sHead] - iRet];
 			memcpy(pTemp, m_pUnsentDataList[m_sHead] + iRet, m_iUnsentDataSize[m_sHead] - iRet);
 
-			delete m_pUnsentDataList[m_sHead];
+			delete [] m_pUnsentDataList[m_sHead];
 			m_pUnsentDataList[m_sHead] = pTemp;
 
 			return DEF_XSOCKEVENT_UNSENTDATASENDBLOCK;
@@ -391,14 +391,14 @@ int XSocket::iSendMsg(char * cData, DWORD dwSize, char cKey)
 	m_pSndBuffer[0] = cKey;
 
 	wp = (WORD *)(m_pSndBuffer + 1);
-	*wp = (short)dwSize + 7;
+	*wp = (WORD)(dwSize + 7);
 
 	memcpy((char *)(m_pSndBuffer + 7), cData, dwSize);
 
 	/*if (cKey != NULL) {//Encryption
-		for (i = 0; i < (short)dwSize; i++) {
+		for (i = 0; i < (int)(dwSize); i++) {
 			m_pSndBuffer[7+i] += (i ^ cKey);
-			m_pSndBuffer[7+i]  = m_pSndBuffer[7+i] ^ (cKey ^ ((short)dwSize - i));
+			m_pSndBuffer[7+i]  = m_pSndBuffer[7+i] ^ (cKey ^ (dwSize - i));
 		}
 	}*/
 
@@ -406,12 +406,12 @@ int XSocket::iSendMsg(char * cData, DWORD dwSize, char cKey)
 
 	int z = 0;
 	bool reverse = false;
-	for (i = 0; i < (short)dwSize; i++) {
+	for (i = 0; i < (int)(dwSize); i++) {
 		if (z == 32) reverse = true;
 		if (z == 0) reverse = false;
 		
 		m_pSndBuffer[7 + i] += (i ^ KeyS[z]);
-		m_pSndBuffer[7 + i] = m_pSndBuffer[7 + i] ^ (KeyS[z] ^ ((short)dwSize - i));
+		m_pSndBuffer[7 + i] = m_pSndBuffer[7 + i] ^ (KeyS[z] ^ (dwSize - i));
 		
 		if (!reverse) z++;
 		else z--;
@@ -535,14 +535,20 @@ char * XSocket::pGetRcvDataPointer(DWORD * pMsgSize, char * pKey)
 	if (pKey != NULL) *pKey = cKey;		// v1.4
 
 	wp = (WORD *)(m_pRcvBuffer + 1);
+	if (*wp < 7) {
+		*pMsgSize = 0;
+		if (pKey != NULL) *pKey = 0;
+		return NULL;
+	}
+
 	*pMsgSize = (*wp) - 7;				// 헤더크기는 제외해서 반환한다. 
 	dwSize    = (*wp) - 7;
 
 	if (dwSize > DEF_MSGBUFFERSIZE) dwSize = DEF_MSGBUFFERSIZE;
 
 	/*if (cKey != NULL) {//Encryption
-		for (i = 0; i < (short)dwSize; i++) {
-			m_pRcvBuffer[3+i]  = m_pRcvBuffer[3+i] ^ (cKey ^ ((short)dwSize - i));
+		for (i = 0; i < (int)(dwSize); i++) {
+			m_pRcvBuffer[3+i]  = m_pRcvBuffer[3+i] ^ (cKey ^ (dwSize - i));
 			m_pRcvBuffer[3+i] -= (i ^ cKey);
 		}
 	}*/
@@ -551,11 +557,11 @@ char * XSocket::pGetRcvDataPointer(DWORD * pMsgSize, char * pKey)
 
 	int z = 0;
 	bool reverse = false;
-	for (i = 0; i < (short)dwSize; i++) {
+	for (i = 0; i < (int)(dwSize); i++) {
 		if (z == 32) reverse = true;
 		if (z == 0) reverse = false;
 
-		m_pRcvBuffer[7 + i] = m_pRcvBuffer[7 + i] ^ (KeyS[z] ^ ((short)dwSize - i));
+		m_pRcvBuffer[7 + i] = m_pRcvBuffer[7 + i] ^ (KeyS[z] ^ (dwSize - i));
 		m_pRcvBuffer[7 + i] -= (i ^ KeyS[z]);
 		
 		if (!reverse) z++;
@@ -576,13 +582,19 @@ char * XSocket::pGetRcvDataPointerClient(DWORD * pMsgSize, char * pKey)
 	if (pKey != NULL) *pKey = cKey;		// v1.4
 
 	wp = (WORD *)(m_pRcvBuffer + 1);
+	if (*wp < 7) {
+		*pMsgSize = 0;
+		if (pKey != NULL) *pKey = 0;
+		return NULL;
+	}
+
 	*pMsgSize = (*wp) - 7;				// 헤더크기는 제외해서 반환한다. 
 	dwSize = (*wp) - 7;
 
 	if (dwSize > DEF_MSGBUFFERSIZE) dwSize = DEF_MSGBUFFERSIZE;
 
-	/*for (i = 0; i < (short)dwSize; i++) {
-		m_pRcvBuffer[7 + i] = m_pRcvBuffer[7 + i] ^ (49 ^ ((short)dwSize - i));
+	/*for (i = 0; i < (int)(dwSize); i++) {
+		m_pRcvBuffer[7 + i] = m_pRcvBuffer[7 + i] ^ (49 ^ (dwSize - i));
 		m_pRcvBuffer[7 + i] -= (i ^ 49);
 	}*/
 
@@ -590,11 +602,11 @@ char * XSocket::pGetRcvDataPointerClient(DWORD * pMsgSize, char * pKey)
 
 	int z = 0;
 	bool reverse = false;
-	for (i = 0; i < (short)dwSize; i++) {
+	for (i = 0; i < (int)(dwSize); i++) {
 		if (z == 32) reverse = true;
 		if (z == 0) reverse = false;
 
-		m_pRcvBuffer[7 + i] = m_pRcvBuffer[7 + i] ^ (KeyS[z] ^ ((short)dwSize - i));
+		m_pRcvBuffer[7 + i] = m_pRcvBuffer[7 + i] ^ (KeyS[z] ^ (dwSize - i));
 		m_pRcvBuffer[7 + i] -= (i ^ KeyS[z]);
 
 		if (!reverse) z++;
@@ -620,6 +632,14 @@ BOOL _InitWinsock()
 void _TermWinsock()
 {
 	WSACleanup();
+}
+
+// Devuelve el tamano que declara la cabecera del paquete recibido (bytes 1-2).
+// Solo se usa para dejar constancia en el log cuando llega un paquete malformado.
+WORD XSocket::wGetRcvHeaderSize()
+{
+	if (m_pRcvBuffer == NULL) return 0;
+	return *((WORD *)(m_pRcvBuffer + 1));
 }
 
 int XSocket::iGetPeerAddress(char * pAddrString)

@@ -1,1 +1,78 @@
-﻿LINK : fatal error LNK1168: cannot open Archive/Helbreath Xsilium.exe for writing
+﻿  BuildItem.cpp
+  CharInfo.cpp
+  Curse.cpp
+  Effect.cpp
+  Event.cpp
+  Game.cpp
+  GameMonitor.cpp
+  Helbreath.cpp
+  Item.cpp
+  ItemName.cpp
+  Magic.cpp
+  MapData.cpp
+  Misc.cpp
+  MouseInterface.cpp
+  Msg.cpp
+  Mydib.cpp
+  Skill.cpp
+  SoundBuffer.cpp
+  Sprite.cpp
+  StrTok.cpp
+  Generating Code...
+  Compiling...
+  Tile.cpp
+  TileSpr.cpp
+  Wmain.cpp
+  XSocket.cpp
+  XSocketUDP.cpp
+  ClientUDP.cpp
+  YWSound.cpp
+  DXC_ddraw.cpp
+  DXC_dinput.cpp
+  DXC_dsound.cpp
+  Resolution.cpp
+  Generating Code...
+     Creating library .\Archive\Helbreath Xsilium.lib and object .\Archive\Helbreath Xsilium.exp
+Jpeg.lib(Jcapimin.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcapimin.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcapistd.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcapistd.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jccoefct.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jccoefct.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jccolor.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jccolor.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcdctmgr.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcdctmgr.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jchuff.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jchuff.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcinit.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcinit.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcmainct.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcmainct.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcmarker.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcmarker.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcmaster.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcmaster.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcomapi.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcomapi.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcparam.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcparam.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcphuff.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcphuff.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcprepct.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcprepct.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jcsample.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jcsample.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdapimin.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdapimin.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdapistd.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdapistd.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdcoefct.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdcoefct.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdcolor.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdcolor.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jddctmgr.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jddctmgr.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdhuff.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdhuff.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdinput.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdinput.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdmainct.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdmainct.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdmarker.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdmarker.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdmaster.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdmaster.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdmerge.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdmerge.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdphuff.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdphuff.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdpostct.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdpostct.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jdsample.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jdsample.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jerror.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jerror.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jfdctflt.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jfdctflt.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jfdctfst.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jfdctfst.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jfdctint.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jfdctint.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jidctflt.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jidctflt.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jidctfst.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jidctfst.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jidctint.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jidctint.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jidctred.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jidctred.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jmemmgr.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jmemmgr.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jmemnobs.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jmemnobs.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jquant1.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jquant1.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jquant2.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jquant2.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+Jpeg.lib(Jutils.obj) : warning LNK4099: PDB 'vc60.pdb' was not found with 'Jpeg.lib(Jutils.obj)' or at 'C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\Archive\vc60.pdb'; linking object as if no debug info
+  Client.vcxproj -> C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Client Version 13\.\Archive\Helbreath Xsilium.exe

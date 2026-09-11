@@ -1,2 +1,15 @@
-﻿Account.obj : warning LNK4075: ignoring '/EDITANDCONTINUE' due to '/OPT:LBR' specification
+﻿  Account.cpp
+  cApplicationStartup.cpp
+  Client.cpp
+  Game.cpp
+  main.cpp
+  MainLog.cpp
+  Map.cpp
+  MapServer.cpp
+  Msg.cpp
+  Wmain.cpp
+  StrTok.cpp
+  XSocket.cpp
+  Generating Code...
+Account.obj : warning LNK4075: ignoring '/EDITANDCONTINUE' due to '/OPT:LBR' specification
   Nucleo.vcxproj -> C:\Users\irwin\Documents\CursedV1 (Arg Version)\[SRC]Nucleo\..\Nucleo\Nucleo.exe

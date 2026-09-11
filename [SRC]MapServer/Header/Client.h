@@ -254,7 +254,22 @@ public:
 
 	struct st_charquest
 	{
-		st_charquest() {}
+		st_charquest()
+		{
+			m_sParentQuestID = 0;
+			m_iKills = 0;
+			m_iMaxKills = 0;
+			m_iRewardContribution = 0;
+			m_iRewardReputation = 0;
+			m_sStatus = 0;
+			m_sCompleted = 0;
+			ZeroMemory(m_cNpcName, sizeof(m_cNpcName));
+			ZeroMemory(m_cMapName, sizeof(m_cMapName));
+			ZeroMemory(m_cRealMapName, sizeof(m_cRealMapName));
+			ZeroMemory(m_cQuestReward1, sizeof(m_cQuestReward1));
+			ZeroMemory(m_cQuestReward2, sizeof(m_cQuestReward2));
+			ZeroMemory(m_cQuestReward3, sizeof(m_cQuestReward3));
+		}
 		short m_sParentQuestID;
 		char  m_cNpcName[21];
 		char  m_cMapName[12];

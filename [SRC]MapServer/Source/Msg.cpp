@@ -21,6 +21,8 @@ CMsg::~CMsg()
 
 BOOL CMsg::bPut(char cFrom, char * pData, DWORD dwSize, int iIndex, char cKey)
 {
+	if (dwSize == 0 || dwSize > 0x00FFFFFF) return FALSE;
+
 	m_pData = new char [dwSize + 1];
 	if (m_pData == NULL) return FALSE;
 	ZeroMemory(m_pData, dwSize + 1);

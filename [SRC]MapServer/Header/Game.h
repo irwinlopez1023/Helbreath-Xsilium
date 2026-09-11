@@ -748,6 +748,7 @@ public:
 	void ReqCreatePortionHandler(int iClientH, char * pData);
 	void _CheckAttackType(int iClientH, short * spType);
 	void AdminOrder_SetInvi(int iClientH, char * pData, DWORD dwMsgSize);
+	void AdminOrder_DmEk(int iClientH, char * pData, DWORD dwMsgSize);
 	void AdminOrder_Polymorph(int iClientH, char * pData, DWORD dwMsgSize);
 	void ForceDisconnectAccount(char * pAccountName, WORD wCount);
 	void NpcRequestAssistance(int iNpcH);
@@ -813,7 +814,7 @@ public:
 	int  _iCalcSkillSSNpoint(int iLevel);
 	
 	
-	void rank_operation(int iClientH);
+	void rank_operation(int iClientH, int iCantidad = 1);
 	void notify_rankup(int iClientH);
 	void notify_rankexp(int iClientH);
 	BOOL bCheckTotalSkillMasteryPoints(int iClientH, int iSkill);
@@ -931,6 +932,10 @@ public:
 	void NotifyCDelete(int client);
 	//agregado lalov9
 	BOOL bCheckClientStatLvl(int iClientH);
+
+	// Deteccion de intentos de tirar el servidor (consola + ServerLogs/Ataques)
+	void ReportarAtaque(int iClientH, char * cMotivo);
+	void RegistrarIPPersonaje(int iClientH);
 	void ResponsePlayerDataHandler(char * pData, DWORD dwSize);
 
 	BOOL bSendMsgToLS(DWORD dwMsg, int iClientH, BOOL bFlag = TRUE,char * pData = NULL );
@@ -1539,7 +1544,7 @@ public:
 	//new objects data (all clients)
 	struct st_objects
 	{
-		st_objects() {}
+		st_objects() : client(0), m_sSide(0), m_sRankLevel(0), iLevel(0), iRebirthLevel(0) {}
 		int client;
 		short m_sSide;
 		short m_sRankLevel;

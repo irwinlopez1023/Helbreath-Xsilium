@@ -437,6 +437,194 @@ Todos los drops están habilitados con probabilidades configuradas con una tabla
 
 
 
+## 🎮 Comandos del servidor
+
+Referencia completa de los comandos de chat de `MapServer`. Están implementados en
+`ChatMsgHandler` (`[SRC]MapServer/Source/MapServer.cpp`), a partir de la línea 9217.
+
+### ⚠️ `/qwepo` — el interruptor maestro
+
+Antes de que **cualquier** comando de administrador responda, hay que escribir `/qwepo` una vez
+por sesión. Ese comando pone la bandera `m_bActivarComandos` a verdadero, y todo el bloque de
+comandos del nivel 1 en adelante vive dentro de esa comprobación. Si escribes `/ci` o `/goto`
+y no pasa nada, es casi siempre porque falta esto.
+
+Requiere nivel de administrador mayor que 0. La confirmación es el mensaje `Admin command ON !`.
+
+El nivel de administrador de cada personaje se lee del campo `admin-user-level` de su ficha,
+en `Nucleo/Character/`.
+
+---
+
+### Nivel 0 — todos los jugadores
+
+| Comando | Qué hace |
+|---|---|
+| `/to <nombre>` | Activa o desactiva el susurro con ese jugador. |
+| `/setpf <texto>` | Escribe tu perfil de personaje. |
+| `/pf <nombre>` | Muestra el perfil de otro jugador. |
+| `/admins` | Lista los administradores conectados. |
+| `/who` | Recuerda que la lista de conectados se abre con Ctrl + W. |
+| `/showframes` | Recuerda que los FPS se ven con Ctrl + N. |
+| `/showversion` | Muestra la versión del cliente. |
+| `/createparty` | Crea un grupo. |
+| `/joinparty <nombre>` | Solicita unirse al grupo de ese jugador. |
+| `/dismissparty` · `/deleteparty` | Disuelven el grupo. Son el mismo comando. |
+| `/hold` | Ordena a tus invocados que se queden quietos. |
+| `/tgt <nombre>` | Ordena a tus invocados atacar a ese objetivo. |
+| `/free` | Libera a tus invocados. |
+| `/summonguild` | Invoca a los miembros del clan. |
+| `/zerkme` | Activa el modo berserk. |
+| `/maname` | Activa el efecto Mana. |
+| `/ban <nombre>` | Expulsa a un miembro de tu clan. No es un baneo del servidor. |
+| `/monstercount` | Cuenta los monstruos del mapa. Para jugadores sin rango de administrador solo funciona en el mapa `abaddon`. |
+| `/changecity` | Desactivado. Responde que el cambio de ciudad se hace desde el panel TRADE MP. |
+
+---
+
+### Nivel 1
+
+| Comando | Qué hace |
+|---|---|
+| `/teleport <mapa>` · `/tp <mapa>` | Te teletransporta. Son el mismo comando. |
+| `/setinvi <0\|1>` | Activa o desactiva tu invisibilidad. |
+
+### Nivel 2
+
+| Comando | Qué hace |
+|---|---|
+| `/ci <ítem>` | **Crea un ítem.** Este es el comando de creación, no `/qwepo`. |
+| `/goto <nombre>` | Te lleva junto a ese jugador. |
+| `/summonplayer <nombre>` | Trae a ese jugador hasta ti. |
+| `/kill <nombre>` | Mata a ese jugador. |
+| `/revive <nombre>` | Lo resucita. |
+| `/sharap <nombre>` | Le silencia el chat. |
+| `/status <nombre>` | Muestra sus datos. |
+| `/closeass <nombre>` | Cierra su conexión. |
+
+### Nivel 3
+
+| Comando | Qué hace |
+|---|---|
+| `/startdm` · `/closedm` | Abren y cierran el Deathmatch. |
+| `/dmek <n>` | Cambia en caliente los EK que da cada kill en el Deathmatch (0-1000). Sin argumento muestra el valor actual. Se reinicia a 3 al reiniciar el servidor. |
+| `/startctf` · `/endctf` | Capture the Flag. |
+| `/cvc` · `/endcvc` | City vs City. |
+| `/allvsall` · `/endallvsall` | Todos contra todos. |
+| `/openrush` · `/closerush` | Evento Rush. |
+| `/startdkevent` · `/enddkevent` | Evento DK. |
+| `/startcrusade <...>` · `/endcrusade <...>` | Modo cruzada. |
+| `/soccer` · `/terminar` | Abren y cierran el partido de fútbol. |
+| `/summon <nombre>` | Invoca un NPC. |
+| `/addcrit` | Reparte puntos de crítico. |
+| `/unlimbo <nombre>` | Saca a un personaje del limbo. |
+| `/sacar` | Desequipa los ítems en el mapa DK. |
+| `/dc <nombre>` | Desconecta a un jugador. |
+| `/realonlines` | Cuenta los conectados reales por bando. |
+
+### Nivel 4
+
+| Comando | Qué hace |
+|---|---|
+| `/startworldwar` · `/endworldwar` | Guerra mundial. |
+| `/startworld2` · `/endworld2` | Guerra mundial II. |
+| `/starttd` · `/endtd` | Tower Defence. |
+| `/starthod` · `/endhod` | Hell of Death. |
+| `/finalfight` · `/closefinalfight` | Evento arena. |
+| `/addmaj` | Reparte puntos de majestic. |
+
+### Nivel 5
+
+| Comando | Qué hace |
+|---|---|
+| `/asigek` | Asigna puntos de enemy kill. |
+| `/jailban <nombre>` | Encarcela a un jugador. |
+| `/checkuserip <nombre>` | Consulta su IP. |
+| `/setobservermode` | Entra o sale del modo observador. |
+
+### Nivel 6
+
+| Comando | Qué hace |
+|---|---|
+| `/playerban <nombre>` | Banea a un jugador. |
+| `/checkip <nombre>` | Consulta una IP. |
+| `/checkrep <nombre>` | Consulta su reputación. |
+| `/summonall <mapa>` | Invoca a todos los jugadores. |
+| `/disconnectall` | Desconecta a todo el mundo. |
+| `/clearmap` | Limpia el mapa. |
+| `/clearnpc` | Elimina los NPC del mapa. |
+| `/unsummonall` · `/unsummonboss` | Retiran los invocados o solo los jefes. |
+| `/summondemon` | Invoca un demonio. |
+| `/createfish <...>` | Crea peces. |
+| `/attack <nombre>` | Manda a los guardias contra alguien. |
+| `/polymorph <...>` | Transforma a un jugador. |
+| `/gns <npc>` | Muestra el estado de un NPC. |
+| `/setzerk <...>` | Fija el berserk de un jugador. |
+| `/city <...>` | Le cambia la ciudad. |
+| `/weather` | Cambia el clima. |
+| `/time <...>` | Cambia la hora del juego. |
+| `/send <nombre>` | Empuja a un jugador. |
+| `/setmsg <texto>` | Fija el mensaje de la cuenta. |
+| `/setforcerecalltime <...>` | Ajusta el tiempo de recall forzado. |
+| `/reservefightzone <...>` | Reserva una fightzone. |
+| `/desbug <nombre>` | Intenta desatascar a un personaje. |
+| `/fi <nombre>` | Comprueba si está conectado. |
+| `/updateranksettings` | **Recarga en caliente** `Configs/RankSettings.cfg`. |
+| `/monstercount` | Cuenta monstruos en cualquier mapa. |
+
+### Nivel 7
+
+| Comando | Qué hace |
+|---|---|
+| `/addrep` · `/addpk` · `/addcoins` | Reparten reputación, PK y coins. |
+| `/startabaddon` · `/endabaddon` | Evento Abaddon. |
+| `/summonevent` · `/endsummonevent` | Evento de invocación. |
+| `/reloadsummon` | **Recarga en caliente** los nueve ficheros de `Events/Summon/`. |
+| `/reloadantihack` | **Recarga en caliente** `Configs/CheckProcess` y `Configs/CheckDlls.cfg`. |
+| `/reloadbanlist` | **Recarga en caliente** la lista de baneados. |
+| `/openmarket` · `/closemarket` | Abren y cierran el mercado. |
+| `/openvip` · `/closevip` | Mapa VIP de caza. |
+| `/openmasacre` · `/closemasacre` | Mapa Masacre. |
+| `/opentower` · `/closedtower` | Tower of Hell. Ojo con la `d` de `/closedtower`. |
+| `/openalleks` · `/closealleks` | Abren y cierran todas las zonas de EK. |
+| `/openalldkeks` · `/closealldkeks` | Lo mismo para las DK. |
+| `/portal <...>` | Abre un portal. |
+| `/closeportal1` · `/closeportal2` · `/closeallportal` | Cierran portales. |
+| `/portales` | Abre cinco portales de golpe. |
+| `/OnQuestx2` · `/OffQuestx2` | Quest al doble. |
+| `/OnQuestx3` · `/OffQuestx3` | Quest al triple. |
+| `/EventosON` · `/EventosOFF` | Eventos automáticos. |
+| `/happyhour <...>` · `/happyday <...>` | Lanzan happy hour y happy day. |
+| `/activarchat` | Alterna tu chat de administrador. |
+| `/createassasain <...>` | Crea un asesino. |
+| `/contarnpcs` | Cuenta los NPC del servidor. |
+| `/actives` | Cuenta los jugadores activos por bando. |
+| `/getticket` | Consigue un ticket de fightzone. |
+| `/setattackmode <...>` | Fija el modo de ataque de un jugador. |
+| `/deslogpull` | Herramienta de desatasco de login. |
+| `/ipban <ip>` | Banea una IP. |
+| `/checkprocess <nombre>` | Comprueba los procesos del cliente. |
+| `/shutdownserver` | **Apaga el servidor.** Desconecta a todos y cierra el proceso cinco segundos después. |
+
+---
+
+### 🐞 Cosas a tener en cuenta
+
+**`/closeportals` no cierra portales.** Pese al nombre, su cuerpo llama a `IniciarAllVsAll()`,
+o sea que **arranca el evento Todos contra Todos**. Si querías cerrar portales, los comandos
+son `/closeportal1`, `/closeportal2` y `/closeallportal`.
+
+**Cinco comandos no existen aunque aparezcan en el código.** Están dentro de bloques comentados,
+así que escribirlos no hace nada: `/respawn`, `/norespawn`, `/ping`, `/EslobAkear` y
+`/HaberNoReal971`.
+
+**`/dismissparty` y `/deleteparty` son idénticos.** Los dos llaman a la misma función.
+
+**`/monstercount` aparece dos veces**, con reglas distintas: en el nivel 0 solo funciona dentro
+del mapa `abaddon`, y en el nivel 6 funciona en cualquiera.
+
+---
+
 ## ⚙️ Requisitos para compilar
 
 Visual Studio 2013

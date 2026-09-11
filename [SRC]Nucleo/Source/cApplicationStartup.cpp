@@ -348,89 +348,112 @@ void CommandList(char * cMsg)
 	std::cout << cMsg << std::endl;
 }
 
-void PutLogList(char * cMsg)
+// ---------------------------------------------------------------------------
+// Logs del Nucleo. Antes tenian doble fclose y strcat sin limite sobre
+// buffers de 30.000 bytes; ahora pasan por _LogBuffered.
+// ---------------------------------------------------------------------------
+
+// Escribe el buffer al archivo del dia y lo vacia. Si el archivo no abre, se descarta.
+static void _LogFlush(char * pBuffer, size_t iBufSize, short * pCounter, const char * cDir, const char * cFileFmt)
 {
-	char cTempBuffer[512];
+	char cFileName[256];
 	SYSTEMTIME SysTime;
-	DWORD dwTime;
 	FILE * pLogFile;
 
-	std::cout << cMsg << std::endl;
+	if (pBuffer[0] != 0) {
+		GetLocalTime(&SysTime);
+		_mkdir("..\\ServerLogs");
+		_mkdir(cDir);
+
+		ZeroMemory(cFileName, sizeof(cFileName));
+		_snprintf(cFileName, sizeof(cFileName) - 1, cFileFmt, SysTime.wDay, SysTime.wMonth, SysTime.wYear);
+
+		pLogFile = fopen(cFileName, "at");
+		if (pLogFile != NULL) {
+			fwrite(pBuffer, 1, strlen(pBuffer), pLogFile);
+			fclose(pLogFile);
+			pLogFile = NULL;
+		}
+	}
+
+	*pCounter = 0;
+	ZeroMemory(pBuffer, iBufSize);
+}
+
+// Acumula una linea con hora; vuelca cada 100 lineas, cada 10 segundos o si el buffer se llena.
+static void _LogBuffered(char * pBuffer, size_t iBufSize, short * pCounter, DWORD * pTime, const char * cDir, const char * cFileFmt, const char * cMsg)
+{
+	char cLine[600];
+	SYSTEMTIME SysTime;
+	DWORD dwTime;
+
+	if (cMsg == NULL) return;
 
 	dwTime = timeGetTime();
-
-	if (G_sLogCounter == 0) G_dwLogTime = dwTime;
-
-	G_sLogCounter++;
+	if (*pCounter == 0) *pTime = dwTime;
+	(*pCounter)++;
 
 	GetLocalTime(&SysTime);
+	ZeroMemory(cLine, sizeof(cLine));
+	_snprintf(cLine, sizeof(cLine) - 1, "%02d:%02d:%02d\t%s\n", SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cLine[sizeof(cLine) - 1] = 0;
 
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	if (strlen(pBuffer) + strlen(cLine) >= iBufSize) _LogFlush(pBuffer, iBufSize, pCounter, cDir, cFileFmt);
+	if (strlen(pBuffer) + strlen(cLine) < iBufSize) strcat(pBuffer, cLine);
 
-	strcat(G_cLogBuffer, cTempBuffer);
+	if ((*pCounter >= 100) || (dwTime - *pTime > 10 * 1000))
+		_LogFlush(pBuffer, iBufSize, pCounter, cDir, cFileFmt);
+}
 
-	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime  >  10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Nucleo");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Nucleo\\NucleoLog [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-
-		pLogFile = fopen(cTempBuffer, "at");
-		if (pLogFile == NULL) return;
-		fwrite(G_cLogBuffer, 1, strlen(G_cLogBuffer), pLogFile);
-		fclose(pLogFile);
-
-		G_sLogCounter = 0;
-		ZeroMemory(G_cLogBuffer, sizeof(G_cLogBuffer));
-
-		if (pLogFile != NULL) fclose(pLogFile);
-	}
+void PutLogList(char * cMsg)
+{
+	std::cout << cMsg << std::endl;
+	_LogBuffered(G_cLogBuffer, sizeof(G_cLogBuffer), &G_sLogCounter, &G_dwLogTime, "..\\ServerLogs\\Nucleo",
+		"..\\ServerLogs\\Nucleo\\NucleoLog [%02d-%02d-%04d].log", cMsg);
 }
 
 void AccountLogList(char * cMsg)
 {
-	char cTempBuffer[512];
-	SYSTEMTIME SysTime;
-	DWORD dwTime;
-	FILE * pAccountFile;
-
 	std::cout << cMsg << std::endl;
+	_LogBuffered(G_cAccountBuffer, sizeof(G_cAccountBuffer), &G_sAccountCounter, &G_dwAccountTime, "..\\ServerLogs\\Accounts",
+		"..\\ServerLogs\\Accounts\\AccountLog [%02d-%02d-%04d].log", cMsg);
+}
 
-	dwTime = timeGetTime();
+// Aviso de intento de ataque al servidor: en rojo en la consola y al momento
+// en ..\ServerLogs\Ataques\Ataques Nucleo [dd-mm-aaaa].txt
+void PutLogAtaque(char * cStr)
+{
+	char cLine[1100], cFileName[256];
+	SYSTEMTIME SysTime;
+	FILE * pLogFile;
+	HANDLE hConsole;
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	BOOL bColor;
 
-	if (G_sAccountCounter == 0) G_dwAccountTime = dwTime;
+	if (cStr == NULL) return;
 
-	G_sAccountCounter++;
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	bColor = ((hConsole != NULL) && (hConsole != INVALID_HANDLE_VALUE) && GetConsoleScreenBufferInfo(hConsole, &csbi));
+	if (bColor) SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_INTENSITY);
+	std::cout << "[ATAQUE] " << cStr << std::endl;
+	if (bColor) SetConsoleTextAttribute(hConsole, csbi.wAttributes);
 
 	GetLocalTime(&SysTime);
+	_mkdir("..\\ServerLogs");
+	_mkdir("..\\ServerLogs\\Ataques");
 
-	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	ZeroMemory(cFileName, sizeof(cFileName));
+	_snprintf(cFileName, sizeof(cFileName) - 1, "..\\ServerLogs\\Ataques\\Ataques Nucleo [%02d-%02d-%04d].txt", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 
-	strcat(G_cAccountBuffer, cTempBuffer);
+	ZeroMemory(cLine, sizeof(cLine));
+	_snprintf(cLine, sizeof(cLine) - 1, "%02d:%02d:%02d\t%s\n", SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cStr);
+	cLine[sizeof(cLine) - 1] = 0;
 
-	if (G_sAccountCounter >= 100 || (dwTime - G_dwAccountTime  >  10 * 1000)) {
-		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-		_mkdir("..\\ServerLogs\\Accounts");
-
-		wsprintf(cTempBuffer, "..\\ServerLogs\\Accounts\\AccountLog [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
-
-		pAccountFile = fopen(cTempBuffer, "at");
-		if (pAccountFile == NULL) return;
-		fwrite(G_cAccountBuffer, 1, strlen(G_cAccountBuffer), pAccountFile);
-		fclose(pAccountFile);
-
-		G_sAccountCounter = 0;
-		ZeroMemory(G_cAccountBuffer, sizeof(G_cAccountBuffer));
-
-		if (pAccountFile != NULL) fclose(pAccountFile);
-	}
-
+	pLogFile = fopen(cFileName, "at");
+	if (pLogFile == NULL) return;
+	fwrite(cLine, 1, strlen(cLine), pLogFile);
+	fclose(pLogFile);
+	pLogFile = NULL;
 }
 
 void ErrorLogList(char * cMsg)

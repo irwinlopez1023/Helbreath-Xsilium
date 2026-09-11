@@ -68,6 +68,8 @@
 
 #include "../Headers/Event.h"
 
+#define DEF_MAXRANKLEVEL 30   // tope de rango: debe coincidir con Rank.h del servidor
+
 extern Event g_ev;
 
 
@@ -274,7 +276,7 @@ public:
 	//new objects data (all clients)
 	struct st_objects
 	{
-		st_objects() {}
+		st_objects() : client(0), m_sSide(0), m_sRankLevel(0), iLevel(0), iRebirthLevel(0) {}
 		int client;
 		short m_sSide;
 		short m_sRankLevel;

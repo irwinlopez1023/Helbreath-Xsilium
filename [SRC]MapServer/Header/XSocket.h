@@ -54,6 +54,7 @@ class XSocket
 {
 public:	
 	int iGetPeerAddress(char * pAddrString);
+	WORD wGetRcvHeaderSize(); // tamano que declara la cabecera del ultimo paquete (para los logs de ataque)
 	char * pGetRcvDataPointer(DWORD * pMsgSize, char * pKey = NULL);
 	char * pGetRcvDataPointerClient(DWORD * pMsgSize, char * pKey = NULL);
 	SOCKET iGetSocket();

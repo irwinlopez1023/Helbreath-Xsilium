@@ -13,6 +13,7 @@ extern char G_cTxt[512];
 //event config
 static int maxkills = 100;
 static int ekxkill = 3;
+static const int kMaxEkPerKill = 1000;   // tope de /dmek
 static int winreward = 5;
 
 CDeathmatch::CDeathmatch()
@@ -55,11 +56,23 @@ void CDeathmatch::join_event(int client)
 	if (!is_fighter(p->m_cCharName)) add_fighter(p->m_cCharName);
 
 	notify_points(client, get_kills(p->m_cCharName), get_deaths(p->m_cCharName));
-	c->RequestTeleportHandler(client, "2   ", "dm", -1 - 1);
+	c->RequestTeleportHandler(client, "2   ", "dm", -1, -1);
 	p->m_bIsSafeAttackMode = FALSE;
 	c->SendNotifyMsg(NULL, client, CLIENT_NOTIFY_SAFEATTACKMODE, NULL, NULL, NULL, NULL);
 	sort_fighters();
 	send_top10(client);
+}
+
+void CDeathmatch::set_ek_per_kill(int value)
+{
+	if (value < 0) value = 0;
+	if (value > kMaxEkPerKill) value = kMaxEkPerKill;
+	ekxkill = value;
+}
+
+int CDeathmatch::get_ek_per_kill()
+{
+	return ekxkill;
 }
 
 void CDeathmatch::getranking(int client)
@@ -144,9 +157,12 @@ int CDeathmatch::get_deaths(char * charname)
 
 void CDeathmatch::remove_fighter(char * charname)
 {
-	for (int i = 0; i < vec_fighters.size(); i++){
+	for (int i = 0; i < (int)vec_fighters.size(); i++){
 		if (strcmp(vec_fighters[i].fighter, charname) == 0)
+		{
 			vec_fighters.erase(vec_fighters.begin() + i);
+			i--;   // sin esto se salta el elemento siguiente
+		}
 	}
 }
 
@@ -184,16 +200,26 @@ void CDeathmatch::kill_enemy(int att, int tar)
 	auto target = c->m_pClientList[tar];
 	if (!attacker || !target) return;
 
-	if (tar != att)
+	// Solo se premia si el evento sigue activo y ambos estan inscritos.
+	// Sin esto se seguian dando EK a quien se quedara en el mapa dm
+	// despues de terminar el evento.
+	bool bScored = g_ev.Is(EventID::Deathmatch)
+		&& (tar != att)
+		&& is_fighter(attacker->m_cCharName)
+		&& is_fighter(target->m_cCharName);
+
+	if (bScored)
 	{
 		attacker->m_iEnemyKillCount += ekxkill;
 		c->SendCommand(attacker->client, "/eks", attacker->m_iEnemyKillCount);
 		add_kills(attacker->m_cCharName, 1);
+		add_deaths(target->m_cCharName, 1);
 	}
 
-	add_deaths(target->m_cCharName, 1);
+	// Siempre, aunque no puntue: el llamador hace return justo despues
+	// y el jugador se quedaria muerto en el mapa para siempre.
 	request_revive(tar);
-	notify(att, tar);
+	if (bScored) notify(att, tar);
 }
 
 void CDeathmatch::request_revive(int client)
@@ -244,7 +270,9 @@ void CDeathmatch::not_revive(int client)
 	p->m_cMagicEffectStatus[DEF_MAGICTYPE_HOLDOBJECT] = 0;
 	p->m_cMagicEffectStatus[DEF_MAGICTYPE_ICE] = 0;
 	c->SendNotifyMsg(NULL, client, CLIENT_NOTIFY_HP, NULL, NULL, NULL, NULL);
-	if (p->IsLocation("elvine"))
+	// m_cSide (1=aresden, 2=elvine) es la ciudadania y no cambia al
+	// entrar al mapa dm; m_cLocation si, por eso IsLocation fallaba.
+	if (p->m_cSide == 2)
 		c->RequestTeleportHandler(client, "2   ", "elvine", -1, -1);
 	else
 		c->RequestTeleportHandler(client, "2   ", "aresden", -1, -1);
@@ -284,7 +312,7 @@ void CDeathmatch::notify(int att, int tar)
 	notify_points(att, attackerkills, get_deaths(attacker->m_cCharName));
 	notify_points(tar, get_kills(target->m_cCharName), get_deaths(target->m_cCharName));
 
-	if (attackerkills == maxkills)
+	if (attackerkills >= maxkills)
 	{
 		WinnerReward(att);
 		End(att);

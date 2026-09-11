@@ -490,6 +490,38 @@ CClient::CClient(HWND hWnd, int handle)  {
 	SellType = -1;
 	BuyTo = -1;
 	TotalItemSell = 0;
+
+	// --- Miembros de CClient que no se inicializaban (auditoria) ---
+	m_rejectedMoves = 0;
+	m_bIsPlayerCivil = 0;
+	m_bIsAdminOrderGoto = 0;
+	m_bIsMsgSendAvailable = 0;
+	m_iHP = 0;
+	m_iMP = 0;
+	m_iSP = 0;
+	m_iLevel = 0;
+	m_iLuck = 0;
+	m_iMaxRankExp = 0;
+	m_iCustomItemValue_Attack = 0;
+	m_iCustomItemValue_Defense = 0;
+	m_iMinAP_SM = 0;
+	m_iMinAP_L = 0;
+	m_iMaxAP_SM = 0;
+	m_iMaxAP_L = 0;
+	m_iLastDamage = 0;
+	m_iSpeedHackCheckExp = 0;
+	m_dwLogoutHackCheck = 0;
+	m_dwHeldenianGUID = 0;
+	m_dwWarBeginTime = 0;
+	m_dwPoisonTime = 0;
+	m_dwExpStockTime = 0;
+	m_dwAutoExpTime = 0;
+	m_dwRecentAttackTime = 0;
+	m_dwSpecialAbilityStartTime = 0;
+	m_dwSpeedHackCheckTime = 0;
+	m_dwCharID = 0;
+
+	ZeroMemory(m_iSkillSSN, sizeof(m_iSkillSSN));
 }
 
 void CClient::initializeWinsock() {

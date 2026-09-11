@@ -22,6 +22,8 @@ public:
 	void WinnerReward(int client);
 	void join_event(int client);
 	void getranking(int client);
+	void set_ek_per_kill(int value);
+	int  get_ek_per_kill();
 	void send_top10(int client);
 	void add_fighter(char * charname);
 	void remove_fighter(char * charname);
@@ -32,7 +34,7 @@ public:
 	
 	struct st_fighters
 	{
-		st_fighters() {}
+		st_fighters() : kills(0), deaths(0) { ZeroMemory(fighter, sizeof(fighter)); }
 		char fighter[12];
 		int kills;
 		int deaths;

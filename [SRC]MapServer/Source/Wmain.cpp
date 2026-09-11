@@ -460,11 +460,12 @@ void PutLogList(char * cMsg)
 	GetLocalTime(&SysTime);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	_snprintf(cTempBuffer, sizeof(cTempBuffer) - 1, "%02d:%02d:%02d\t%s\n",
+		SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cTempBuffer[sizeof(cTempBuffer) - 1] = 0;
 
-	strcat(G_cLogBuffer, cTempBuffer);
+	if (strlen(G_cLogBuffer) + strlen(cTempBuffer) < sizeof(G_cLogBuffer))
+		strcat(G_cLogBuffer, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -473,14 +474,18 @@ void PutLogList(char * cMsg)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\MapServer\\MapServerLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 
 		pLogFile = fopen(cTempBuffer, "at");
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer, sizeof(G_cLogBuffer));
+			return;
+		}
 		fwrite(G_cLogBuffer, 1, strlen(G_cLogBuffer), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer, sizeof(G_cLogBuffer));
 
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -505,11 +510,12 @@ void CharacterLogList(char * cMsg)
 	GetLocalTime(&SysTime);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	_snprintf(cTempBuffer, sizeof(cTempBuffer) - 1, "%02d:%02d:%02d\t%s\n",
+		SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cTempBuffer[sizeof(cTempBuffer) - 1] = 0;
 
-	strcat(G_cLogBuffer7, cTempBuffer);
+	if (strlen(G_cLogBuffer7) + strlen(cTempBuffer) < sizeof(G_cLogBuffer7))
+		strcat(G_cLogBuffer7, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -518,13 +524,17 @@ void CharacterLogList(char * cMsg)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\Characters\\CharactersLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer7, sizeof(G_cLogBuffer7));
+			return;
+		}
 
 		fwrite(G_cLogBuffer7, 1, strlen(G_cLogBuffer7), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer7, sizeof(G_cLogBuffer7));
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -567,11 +577,12 @@ void ErrorList(char * cMsg)
 	GetLocalTime(&SysTime);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	_snprintf(cTempBuffer, sizeof(cTempBuffer) - 1, "%02d:%02d:%02d\t%s\n",
+		SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cTempBuffer[sizeof(cTempBuffer) - 1] = 0;
 
-	strcat(G_cLogBuffer9, cTempBuffer);
+	if (strlen(G_cLogBuffer9) + strlen(cTempBuffer) < sizeof(G_cLogBuffer9))
+		strcat(G_cLogBuffer9, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -580,13 +591,17 @@ void ErrorList(char * cMsg)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\MapServer Errors\\MS Errors [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer9, sizeof(G_cLogBuffer9));
+			return;
+		}
 
 		fwrite(G_cLogBuffer9, 1, strlen(G_cLogBuffer9), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer9, sizeof(G_cLogBuffer9));
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -611,11 +626,12 @@ void ChatLogs(char * cMsg)
 	GetLocalTime(&SysTime);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	_snprintf(cTempBuffer, sizeof(cTempBuffer) - 1, "%02d:%02d:%02d\t%s\n",
+		SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cTempBuffer[sizeof(cTempBuffer) - 1] = 0;
 
-	strcat(G_cLogBuffer3, cTempBuffer);
+	if (strlen(G_cLogBuffer3) + strlen(cTempBuffer) < sizeof(G_cLogBuffer3))
+		strcat(G_cLogBuffer3, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -624,13 +640,17 @@ void ChatLogs(char * cMsg)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\Chats\\ChatsLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer3, sizeof(G_cLogBuffer3));
+			return;
+		}
 
 		fwrite(G_cLogBuffer3, 1, strlen(G_cLogBuffer3), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer3, sizeof(G_cLogBuffer3));
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -875,7 +895,8 @@ void PutGMLogData(char * cStr)
 	strcat(cTempBuffer, cStr);
 	strcat(cTempBuffer, "\n");
 
-	strcat(G_cLogBuffer4, cTempBuffer);
+	if (strlen(G_cLogBuffer4) + strlen(cTempBuffer) < sizeof(G_cLogBuffer4))
+		strcat(G_cLogBuffer4, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -884,13 +905,17 @@ void PutGMLogData(char * cStr)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\GM\\GMLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer4, sizeof(G_cLogBuffer4));
+			return;
+		}
 
 		fwrite(G_cLogBuffer4, 1, strlen(G_cLogBuffer4), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer4, sizeof(G_cLogBuffer4));
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -914,7 +939,8 @@ void PutLogTradeFileList(char * cStr)
 	strcat(cTempBuffer, cStr);
 	strcat(cTempBuffer, "\n");
 
-	strcat(G_cLogBuffer10, cTempBuffer);
+	if (strlen(G_cLogBuffer10) + strlen(cTempBuffer) < sizeof(G_cLogBuffer10))
+		strcat(G_cLogBuffer10, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -924,13 +950,17 @@ void PutLogTradeFileList(char * cStr)
 
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer10, sizeof(G_cLogBuffer10));
+			return;
+		}
 
 		fwrite(G_cLogBuffer10, 1, strlen(G_cLogBuffer10), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer10, sizeof(G_cLogBuffer10));
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -954,7 +984,8 @@ void PutLogCoinsFileList(char * cStr)
 	strcat(cTempBuffer, cStr);
 	strcat(cTempBuffer, "\n");
 
-	strcat(G_cLogBuffer5, cTempBuffer);
+	if (strlen(G_cLogBuffer5) + strlen(cTempBuffer) < sizeof(G_cLogBuffer5))
+		strcat(G_cLogBuffer5, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -963,13 +994,17 @@ void PutLogCoinsFileList(char * cStr)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\Coins\\CoinsLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer5, sizeof(G_cLogBuffer5));
+			return;
+		}
 
 		fwrite(G_cLogBuffer5, 1, strlen(G_cLogBuffer5), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer5, sizeof(G_cLogBuffer5));
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -994,7 +1029,8 @@ void PutLogHacksFileList(char * cStr)
 	strcat(cTempBuffer, cStr);
 	strcat(cTempBuffer, "\n");
 
-	strcat(G_cLogBuffer6, cTempBuffer);
+	if (strlen(G_cLogBuffer6) + strlen(cTempBuffer) < sizeof(G_cLogBuffer6))
+		strcat(G_cLogBuffer6, cTempBuffer);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
 	_mkdir("..\\ServerLogs\\Hacks");
@@ -1002,12 +1038,16 @@ void PutLogHacksFileList(char * cStr)
 	wsprintf(cTempBuffer, "..\\ServerLogs\\Hacks\\HacksLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 	pLogFile = fopen(cTempBuffer, "at");
 
-	if (pLogFile == NULL) return;
+	if (pLogFile == NULL) {
+		G_sLogCounter = 0;
+		ZeroMemory(G_cLogBuffer6, sizeof(G_cLogBuffer6));
+		return;
+	}
 
 	fwrite(G_cLogBuffer6, 1, strlen(G_cLogBuffer6), pLogFile);
 	fclose(pLogFile);
+	pLogFile = NULL;
 	ZeroMemory(G_cLogBuffer6, sizeof(G_cLogBuffer6));
-	if (pLogFile != NULL) fclose(pLogFile);
 }
 
 //Agregado LogDrop Lalov9
@@ -1035,7 +1075,8 @@ void PutLogDrops(char * cStr)
 	strcat(cTempBuffer, cStr);
 	strcat(cTempBuffer, "\n");
 
-	strcat(G_cLogBuffer11, cTempBuffer);
+	if (strlen(G_cLogBuffer11) + strlen(cTempBuffer) < sizeof(G_cLogBuffer11))
+		strcat(G_cLogBuffer11, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 
@@ -1045,15 +1086,19 @@ void PutLogDrops(char * cStr)
 	wsprintf(cTempBuffer, "..\\ServerLogs\\Drops\\DropsLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 	pLogFile = fopen(cTempBuffer, "at");
 
-	if (pLogFile == NULL) return;
+	if (pLogFile == NULL) {
+		G_sLogCounter = 0;
+		ZeroMemory(G_cLogBuffer11, sizeof(G_cLogBuffer11));
+		return;
+	}
 
 	fwrite(G_cLogBuffer11, 1, strlen(G_cLogBuffer11), pLogFile);
 	fclose(pLogFile);
+	pLogFile = NULL;
 
 	G_sLogCounter = 0;
 
 	ZeroMemory(G_cLogBuffer11, sizeof(G_cLogBuffer11));
-	if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -1073,7 +1118,7 @@ void PutLogOnlinesFileList(char * cStr)
 
 	fwrite(cStr, 1, strlen(cStr), pLogFile);
 	fclose(pLogFile);
-	if (pLogFile != NULL) fclose(pLogFile);
+	pLogFile = NULL;
 }
 
 void PutLogItemsList(char * cMsg)
@@ -1092,11 +1137,12 @@ void PutLogItemsList(char * cMsg)
 	GetLocalTime(&SysTime);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	_snprintf(cTempBuffer, sizeof(cTempBuffer) - 1, "%02d:%02d:%02d\t%s\n",
+		SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cTempBuffer[sizeof(cTempBuffer) - 1] = 0;
 
-	strcat(G_cLogBuffer2, cTempBuffer);
+	if (strlen(G_cLogBuffer2) + strlen(cTempBuffer) < sizeof(G_cLogBuffer2))
+		strcat(G_cLogBuffer2, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -1105,14 +1151,18 @@ void PutLogItemsList(char * cMsg)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\Items\\ItemLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 
 		pLogFile = fopen(cTempBuffer, "at");
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer2, sizeof(G_cLogBuffer2));
+			return;
+		}
 		fwrite(G_cLogBuffer2, 1, strlen(G_cLogBuffer2), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer2, sizeof(G_cLogBuffer2));
 
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 
@@ -1132,11 +1182,12 @@ void PutEkAndPkLogFileList(char * cMsg)
 	GetLocalTime(&SysTime);
 
 	ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
-	wsprintf(cTempBuffer, "%02d:%02d:%02d\t", SysTime.wHour, SysTime.wMinute, SysTime.wSecond);
-	strcat(cTempBuffer, cMsg);
-	strcat(cTempBuffer, "\n");
+	_snprintf(cTempBuffer, sizeof(cTempBuffer) - 1, "%02d:%02d:%02d\t%s\n",
+		SysTime.wHour, SysTime.wMinute, SysTime.wSecond, cMsg);
+	cTempBuffer[sizeof(cTempBuffer) - 1] = 0;
 
-	strcat(G_cLogBuffer8, cTempBuffer);
+	if (strlen(G_cLogBuffer8) + strlen(cTempBuffer) < sizeof(G_cLogBuffer8))
+		strcat(G_cLogBuffer8, cTempBuffer);
 
 	if (G_sLogCounter >= 100 || (dwTime - G_dwLogTime > 10 * 1000)) {
 		ZeroMemory(cTempBuffer, sizeof(cTempBuffer));
@@ -1145,14 +1196,18 @@ void PutEkAndPkLogFileList(char * cMsg)
 		wsprintf(cTempBuffer, "..\\ServerLogs\\EksAndPks\\EksAndPksLogs [%02d-%02d-%04d].log", SysTime.wDay, SysTime.wMonth, SysTime.wYear);
 		pLogFile = fopen(cTempBuffer, "at");
 
-		if (pLogFile == NULL) return;
+		if (pLogFile == NULL) {
+			G_sLogCounter = 0;
+			ZeroMemory(G_cLogBuffer8, sizeof(G_cLogBuffer8));
+			return;
+		}
 		fwrite(G_cLogBuffer8, 1, strlen(G_cLogBuffer8), pLogFile);
 		fclose(pLogFile);
+		pLogFile = NULL;
 
 		G_sLogCounter = 0;
 		ZeroMemory(G_cLogBuffer8, sizeof(G_cLogBuffer8));
 
-		if (pLogFile != NULL) fclose(pLogFile);
 	}
 }
 */

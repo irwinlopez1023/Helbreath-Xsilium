@@ -4,6 +4,7 @@
 #pragma warning(disable : 4996)
 
 #include "../Headers/Game.h"
+#include "../Headers/DebugCliente.h"
 #include "../Language/lan_eng.h"
 //added resolution
 #include "..\Resolution\Resolution.h"
@@ -813,12 +814,14 @@ void CGame::OnGameSocketEvent(WPARAM wParam, LPARAM lParam)
 		break;
 
 	case DEF_XSOCKEVENT_SOCKETCLOSED:
+		DebugCliente_Texto("socket del juego: el servidor cerro la conexion");
 		ChangeGameMode(DEF_GAMEMODE_ONCONNECTIONLOST);
 		delete m_pGSock;
 		m_pGSock = NULL;
 		break;
 
 	case DEF_XSOCKEVENT_SOCKETERROR:
+		DebugCliente_Texto("socket del juego: error de socket");
 		ChangeGameMode(DEF_GAMEMODE_ONCONNECTIONLOST);
 		delete m_pGSock;
 		m_pGSock = NULL;
@@ -17648,6 +17651,7 @@ void CGame::ClearContents_OnCreateNewAccount()
 
 void CGame::ChangeGameMode(char cMode)
 {
+	DebugCliente_Evento(DBGC_MODO, (DWORD)(unsigned char)cMode, (DWORD)(unsigned char)m_cGameMode, 0);
 	m_cGameMode = cMode;
 	m_cGameModeCount = 0;
 	m_dwTime = G_dwGlobalTime;
@@ -39442,6 +39446,7 @@ void CGame::NotifyMsgHandler(char * pData)
 			break;
 
 		case CLIENT_RESPONSE_DELETEHACK:
+			DebugCliente_Texto("el servidor mando DELETEHACK: se cierra el cliente");
 			SendMessage(m_hWnd, WM_DESTROY, NULL, NULL);
 			break;
 
@@ -41706,9 +41711,11 @@ void CGame::DrawObjectName(short sX, short sY, char * pName, int iStatus, int Ob
 	}
 	//EncriptString(m_cCurLocation);
 
-	if (DecriptInt(m_iLevel) < m_iPlayerMaxLevel) return;
-
-		short rank = get_object_rank(ObjectID);
+	// El rango se muestra a cualquier nivel. Para el propio personaje usamos
+	// m_sRankLevel porque uno mismo no aparece en la lista vObjects.
+	short rank;
+	if (string(pName) == m_cPlayerName) rank = m_sRankLevel;
+	else rank = get_object_rank(ObjectID);
 		char crank[100];
 		ZeroMemory(crank, sizeof(crank));
 
@@ -41975,87 +41982,40 @@ void CGame::DrawObjectName(short sX, short sY, char * pName, int iStatus, int Ob
 	}
 
 
-	//if (rank != -1) PutString2(sX, sY + 4 + 14 + 14 + iAddY, crank, 179, 158, 21);
-	//if (rank != -1) PutString2(sX, sY + 14 + 14 + iAddY, crank, 179, 158, 21);
-	/*
-	if (string(pName) == m_cPlayerName && m_sRankLevel != 30)//20
+	if (rank > 0 && crank[0] != NULL) PutString2(sX, sY + 4 + 14 + 14 + 14 + iAddY, crank, 179, 158, 21);
+
+	// Barra de experiencia de rango, solo sobre el propio personaje. Va debajo de la
+	// etiqueta de rango (o en su sitio si todavia no hay rango). El servidor manda
+	// m_iRankExp y m_iMaxRankExp al entrar y cada vez que cambian (NOT_RANKEXP).
+	if (string(pName) == m_cPlayerName)
 	{
-		PutAlignedString(sX, sX + 101, sY + 4 + 14 + 14 + 14 + iAddY, "Rank Exp", 180, 180, 180);
+		int iYBarra = sY + 4 + 14 + 14 + 14 + iAddY + ((rank > 0 && crank[0] != NULL) ? 14 : 0);
+		char cBarra[64];
+		int iAncho, x, y;
+		short sBR, sBG, sBB;
 
-		if (m_iMaxRankExp <= 0) m_iMaxRankExp = 1;
-		if (m_iRankExp <= 0) m_iRankExp = 1;
-
-
-		int iPorc = (m_iRankExp * 200) / m_iMaxRankExp;
-
-		m_DDraw.DrawShadowBox(sX, sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4, sX + 101, sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 15);
-
-		for (int i = 0; i < iPorc; i++)
-		{
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4, 0, 0, 0);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 1, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 2, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 3, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 4, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 5, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 6, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 7, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 8, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 9, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 10, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 11, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 12, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 13, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 14, 131, 125, 46);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 15, 0, 0, 0);
+		ZeroMemory(cBarra, sizeof(cBarra));
+		if (m_sRankLevel >= DEF_MAXRANKLEVEL) {
+			iAncho = 100;
+			sBR = 47; sBG = 139; sBB = 29;
+			wsprintf(cBarra, "Rank MAX");
+		}
+		else {
+			int iMaxR = (m_iMaxRankExp > 0) ? m_iMaxRankExp : 1;
+			int iExpR = (m_iRankExp > 0) ? m_iRankExp : 0;
+			iAncho = (int)(((__int64)iExpR * 100) / iMaxR);
+			if (iAncho > 100) iAncho = 100;
+			sBR = 131; sBG = 125; sBB = 46;
+			wsprintf(cBarra, "Rank Exp %d/%d", iExpR, m_iMaxRankExp);
 		}
 
-		string sporc = "Next Rank: ";
-		sporc.append(to_string(m_iRankExp));
-		sporc.append("/");
-		sporc.append(to_string(m_iMaxRankExp));
+		m_DDraw.DrawShadowBox(sX, iYBarra, sX + 101, iYBarra + 15);
+		for (x = 0; x < iAncho; x++)
+			for (y = 1; y < 15; y++)
+				m_DDraw.PutPixel(sX + 1 + x, iYBarra + y, sBR, sBG, sBB);
 
-		PutAlignedString(sX, sX + 101, sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4, (char*)sporc.c_str(), 255, 255, 255);
-		//PutString2(sX + 2, sY + 4 + 14 + 14 + 14 + iAddY + 4, (char*)sporc.c_str(), 255, 255, 255);
-			}
-	else if (string(pName) == m_cPlayerName && m_sRankLevel == 30)//20
-	{
-		PutAlignedString(sX, sX + 101, sY + 4 + 14 + 14 + 14 + iAddY, "Rank Exp", 180, 180, 180);
-		int iPorc = (m_iRankExp * 200) / m_iMaxRankExp;
-
-		m_DDraw.DrawShadowBox(sX, sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4, sX + 101, sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 15);
-
-		for (int i = 0; i < 200; i++)
-		{
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4, 0, 0, 0);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 1, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 2, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 3, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 4, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 5, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 6, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 7, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 8, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 9, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 10, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 11, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 12, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 13, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 14, 47, 139, 29);
-			m_DDraw.PutPixel(sX + 1 + (i / 2), sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4 + 15, 0, 0, 0);
-		}
-
-		string sporc = "Next Rank: ";
-		sporc.append(to_string(m_iRankExp));
-		sporc.append("/");
-		sporc.append(to_string(m_iMaxRankExp));
-
-		PutAlignedString(sX, sX + 101, sY + 4 + 14 + 14 + 14 + 12 + iAddY + 4, (char*)sporc.c_str(), 255, 255, 255);
-		//PutString2(sX + 2, sY + 4 + 14 + 14 + 14 + iAddY + 4, (char*)sporc.c_str(), 255, 255, 255);
+		PutAlignedString(sX, sX + 101, iYBarra + 1, cBarra, 255, 255, 255);
 	}
-
-
-	*/
 
 #ifdef _DEBUGS
 	wsprintf(cTxt2, "Status: 0x%.8X ", iStatus);
@@ -46549,6 +46509,7 @@ void CGame::OnTimer()
 					m_iNetLagCount++;
 					if (m_iNetLagCount >= 7)
 					{
+						DebugCliente_Texto("lag: 7 comprobaciones seguidas sin respuesta, conexion perdida");
 						ChangeGameMode(DEF_GAMEMODE_ONCONNECTIONLOST);
 						delete m_pGSock;
 						m_pGSock = NULL;
@@ -46971,6 +46932,7 @@ CP_SKIPMOUSEBUTTONSTATUS:;
 	if (m_bCommandAvailable == FALSE) return;
 	if ((dwTime - m_dwCommandTime) < 1)
 	{
+		DebugCliente_Texto("CommandProcessor: dos comandos en el mismo ms (anti-speedhack), desconexion");
 		delete m_pGSock;
 		m_pGSock = NULL;
 		m_bEscPressed = FALSE;
@@ -50408,6 +50370,7 @@ BOOL CGame::bSendCommand(DWORD dwMsgID, WORD wCommand, char cDir, int iV1, int i
 	char cData[512];
 
 	if ((m_pGSock == NULL) && (m_pLSock == NULL)) return FALSE;
+	DebugCliente_Evento(DBGC_SEND, dwMsgID, wCommand, (DWORD)iV1);
 	dwTime = timeGetTime();
 	ZeroMemory(cMsg, sizeof(cMsg));
 	ZeroMemory(cData, sizeof(cData));
@@ -51513,6 +51476,7 @@ BOOL CGame::bSendCommand(DWORD dwMsgID, WORD wCommand, char cDir, int iV1, int i
 			break;
 
 		case DEF_XSOCKEVENT_CRITICALERROR:
+			DebugCliente_Texto("socket del juego: error critico al enviar, se cierra el cliente");
 			delete m_pGSock;
 			m_pGSock = NULL;
 			if (G_pCalcSocket != NULL) {
@@ -73278,7 +73242,12 @@ void CGame::notifyLevelChange()
 void CGame::GameRecvMsgHandler(DWORD dwMsgSize, char * pData)
 {
 	DWORD * dwpMsgID;
+	if (pData == NULL) {
+		DebugCliente_Texto("GameRecvMsgHandler: paquete sin datos (pData NULL)");
+		return;
+	}
 	dwpMsgID = (DWORD *)(pData + DEF_INDEX4_MSGID);
+	DebugCliente_Evento(DBGC_RECV, *dwpMsgID, dwMsgSize, (dwMsgSize >= 6) ? *((WORD *)(pData + DEF_INDEX2_MSGTYPE)) : 0);
 	switch (*dwpMsgID) {
 
 	case REQUEST_MARKETITEMS:
@@ -75103,6 +75072,7 @@ void CGame::GetObjectsData(char* data)
 		Pop(data, u.m_sSide);
 		Pop(data, u.iLevel);
 		Pop(data, u.iRebirthLevel);
+		Pop(data, u.m_sRankLevel);
 
 		vObjects.push_back(u);
 	}

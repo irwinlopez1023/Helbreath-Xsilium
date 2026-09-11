@@ -530,6 +530,12 @@ char * XSocket::pGetRcvDataPointer(DWORD * pMsgSize, char * pKey)
 	if (pKey != NULL) *pKey = cKey;		// v1.4
 
 	wp = (WORD *)(m_pRcvBuffer + 1);
+	if (*wp < 7) {
+		*pMsgSize = 0;
+		if (pKey != NULL) *pKey = 0;
+		return NULL;
+	}
+
 	*pMsgSize = (*wp) - 7;				// 헤더크기는 제외해서 반환한다. 
 	dwSize = (*wp) - 7;
 
@@ -577,6 +583,14 @@ BOOL _InitWinsock()
 void _TermWinsock()
 {
 	WSACleanup();
+}
+
+// Devuelve el tamano que declara la cabecera del paquete recibido (bytes 1-2).
+// Solo se usa para dejar constancia en el log cuando llega un paquete malformado.
+WORD XSocket::wGetRcvHeaderSize()
+{
+	if (m_pRcvBuffer == NULL) return 0;
+	return *((WORD *)(m_pRcvBuffer + 1));
 }
 
 int XSocket::iGetPeerAddress(char * pAddrString)

@@ -29,6 +29,7 @@ void ConfigList(char * cMsg);
 void PutLogList(char * cMsg);
 void AccountLogList(char * cMsg);
 void ErrorLogList(char * cMsg);
+void PutLogAtaque(char * cStr);
 void CommandList(char * cMsg);
 void UpdateConfigList(char * cMsg);
 

@@ -1,21 +1,75 @@
-*.opensdf
-*.sdf
+# ============================================================================
+# Helbreath Xsilium - .gitignore
+#
+# OJO: .gitignore solo afecta a archivos NUEVOS. Los que ya estan en el repo
+# hay que sacarlos una vez con "git rm -r --cached" (ver docs o el chat).
+# ============================================================================
+
+# --- Carpetas nuestras que no se suben ---------------------------------------
+docs/
+**/Depuracion/
+*.dmp
+
+# --- Visual Studio: caches, estado del IDE y ajustes por usuario -------------
+.vs/
+**/.vs/
 *.suo
 *.user
-*.VC.db
-*.log
-*.idb
+*.sdf
+*.opensdf
 *.opendb
+*.VC.db
+*.VC.VC.opendb
 *.vsidx
+*.ipch
+ipch/
+*.aps
+**/enc_temp_folder/
+
+# --- Restos de compilacion (se regeneran en cada build) ----------------------
+*.obj
+*.tlog
+*.lastbuildstate
+*.unsuccessfulbuild
+*.idb
 *.pdb
+*.ilk
+*.exp
+*.iobj
+*.ipdb
+*.pch
+*.cache
+*.log
+*.res
+[SRC]MapServer/Debug/
+[SRC]MapServer/Release/
+[SRC]Nucleo/Debug/
+[SRC]Nucleo/Release/
+[SRC]Client Version 13/x64/
+[SRC]Client Version 13/Release/
+[SRC]Client Version 13/CxImage/Debug/
+[SRC]Client Version 13/CxImage/Release/
+[SRC]Client Version 13/jpeg/Debug/
+[SRC]Client Version 13/jpeg/Release/
+# Ojo: [SRC]Client Version 13/Debug/ NO se ignora entera: ahi estan SPRITES,
+# SOUNDS, MAPDATA... Solo se ignoran sus .obj/.tlog/.pdb por extension.
+
+# --- Ejecutables que produce la compilacion ----------------------------------
+# Descomenta si prefieres no subirlos (quien clone tendra que compilar):
+# MapServer/MapServer.exe
+# Nucleo/Nucleo.exe
+# [SRC]Client Version 13/Archive/Helbreath Xsilium.exe
+
+# --- Datos que genera el servidor al jugar -----------------------------------
+**/ServerLogs/
 **/Nucleo/Account/
 **/Nucleo/Character/
-**/ServerLogs/
-*.ipch
-**/.vs/
-.vs/
-**/enc_temp_folder
-/ServerLogs/*.log
-**/ServerLogs/**/*.log
-/Accounts/*.log
-Xsilium.zip 
+/Accounts/
+MapServer/Error.Log
+MapServer/log.txt
+
+# --- Basura del sistema ------------------------------------------------------
+Thumbs.db
+desktop.ini
+Xsilium.zip
+CLAUDE.md

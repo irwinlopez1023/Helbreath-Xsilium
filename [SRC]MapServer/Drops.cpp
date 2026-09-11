@@ -1,4 +1,5 @@
 ﻿#include "Header\\Game.h"
+#include <random>
 extern char G_cTxt[512];
 
 int ITEMSPREAD_FIEXD_COORD[25][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }, { 2, -1 }, { 2, 0 },
@@ -24,61 +25,49 @@ int ITEMSPREAD_FIEXD_COORD[25][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { 
 
 
 
-//Sistema de drop mejorado.
+// Tabla de multiplicadores segun el README. Cada peso es el porcentaje x 1.000.000
+// y el conjunto suma exactamente kProbDenominator, asi que ninguna tirada se cae al final.
+static const int kProbDenominator = 100000000;   // 100.000.000 = 100,000000 %
+
+// rand() solo tiene 32.768 resultados posibles: no puede expresar 1 entre 16,7 millones,
+// que es lo que pide el tramo mas raro. Generador propio solo para los drops.
+static std::mt19937 g_dropRng((unsigned)time(NULL));
+
+static int iRollDropTable()
+{
+	std::uniform_int_distribution<int> dist(1, kProbDenominator);
+	return dist(g_dropRng);   // 1 .. 100.000.000, sin sesgo de modulo
+}
+
 static const int kNumMultipliers = 15;
 static const int kMultiplierProbabilities[15] = {
-	12000, // x1 ( 7% / 3%)  → 40.00%
-	7500,  // x2 (14% / 6%)  → 25.00%
-	4500,  // x3 (21% / 9%)  → 15.00%
-	2100,  // x4 (28% / 12%) → 9.00%
-	900,  // x5 (35% / 15%) → 5.00%
-	300,   // x6 (42% / 18%) → 2.50%
-	60,   // x7 (49% / 21%) → 1.50%
-	30,   // x8 (56% / 24%) → 1.00%
-	15,   // x9 (63% / 27%) → 0.50%
-	9,    // x10 (70% / 30%)→ 0.25%
-	6,    // x11 (77% / 33%)→ 0.125%
-	4,    // x12 (84% / 36%)→ 0.075%
-	3,    // x13 (91% / 39%)→ 0.030%
-	2,     // x14 (98% / 42%)→ 0.015%
-	1      // x15 (105% / 45%)→ 0.005%
-}; 
+	42165004, // x1    3% MR /   7% PA-MA   README 40,000000 % + residuo
+	25000000, // x2    6% /  14%                  25,000000 %
+	15000000, // x3    9% /  21%                  15,000000 %
+	 9000000, // x4   12% /  28%                   9,000000 %
+	 8745000, // x5   15% /  35%                   8,745000 %
+	   83000, // x6   18% /  42%                   0,083000 %
+	    3000, // x7   21% /  49%                   0,003000 %
+	    2000, // x8   24% /  56%                   0,002000 %
+	    1000, // x9   27% /  63%                   0,001000 %
+	     500, // x10  30% /  70%                   0,000500 %
+	     250, // x11  33% /  77%                   0,000250 %
+	     150, // x12  36% /  84%                   0,000150 %
+	      60, // x13  39% /  91%                   0,000060 %
+	      30, // x14  42% /  98%                   0,000030 %
+	       6  // x15  45% / 105%                   0,000006 %
+};
 
 
 
 int CMapServer::RollByProbabilityTable(const int* chances, int size) {
-	int roll = iDice(1, 30000); // valor entre 1 y 30000
+	int roll = iRollDropTable();      // 1 .. 100.000.000
 	int acc = 0;
 	for (int i = 0; i < size; ++i) {
 		acc += chances[i];
-		if (roll <= acc) {
-			int multiplier = i + 1;
-
-			if (multiplier == 6) {
-				//std::cout << "Solicitud de drop x6" << std::endl;
-				if (iDice(1, 30) != 1) {
-					multiplier = 5; // baja a x5 (35%)
-					//std::cout << "Solicitud denegada" << std::endl;
-				}
-				else {
-					//std::cout << "Solicitud aprobada para x" << multiplier << std::endl;
-				}
-
-			}else if(multiplier >= 7) {
-				//std::cout << "Solicitud de drop x" << multiplier << std::endl;
-				if (iDice(1, 500) != 1) {
-					multiplier = 5; // baja a x5 (35%)
-					//std::cout << "Solicitud denegada" << std::endl;
-				}
-				else {
-					std::cout << "Solicitud aprobada para x" << multiplier << std::endl;
-				}
-			}
-
-			return multiplier;
-		}
+		if (roll <= acc) return i + 1;   // la tabla ya es la probabilidad final
 	}
-	return 1; 
+	return 1;   // inalcanzable: los pesos suman el denominador exacto
 }
 
 

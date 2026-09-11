@@ -2,17 +2,120 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <direct.h>
+#include <map>
+#include <vector>
+#include <string>
+#include <algorithm>
 #include "..\..\shared\shared.h"
 
 extern void	PutLogList(char * cMsg);
 extern void	AccountLogList(char * cMsg);
 extern void ConfigList(char * cMsg);
 extern void ErrorLogList(char * cMsg);
+extern void PutLogAtaque(char * cStr);
 extern void UpdateConfigList(char * cMsg);
 extern void CommandList(char * cMsg);
 
 extern char	G_cTxt[500];
 extern char	G_cData50000[50000];
+
+// ---------------------------------------------------------------------------
+// Deteccion de intentos de tirar el Nucleo
+//
+// Un paquete con tamano imposible (el que antes tumbaba el servidor sin
+// necesidad de cuenta) se avisa en rojo en la consola y se escribe en
+// ..\ServerLogs\Ataques\Ataques Nucleo [dd-mm-aaaa].txt con la IP, las cuentas
+// conectadas ahora desde esa IP y las que entraron desde ella antes.
+// ---------------------------------------------------------------------------
+
+// Historial IP -> cuentas que entraron desde esa IP. Solo en memoria.
+static std::map<std::string, std::vector<std::string> > G_mapIPCuentas;
+
+static void _RegistrarIPCuenta(const char * cIP, const char * cAccountName)
+{
+	char cCuenta[12];
+
+	if ((cIP == NULL) || (cAccountName == NULL)) return;
+	if ((cIP[0] == 0) || (cAccountName[0] == 0)) return;
+
+	ZeroMemory(cCuenta, sizeof(cCuenta));
+	strncpy(cCuenta, cAccountName, 10);
+
+	if (G_mapIPCuentas.size() >= 20000) G_mapIPCuentas.clear();
+
+	std::vector<std::string> & lista = G_mapIPCuentas[std::string(cIP)];
+	if (std::find(lista.begin(), lista.end(), std::string(cCuenta)) != lista.end()) return;
+	if (lista.size() >= 10) lista.erase(lista.begin());
+	lista.push_back(std::string(cCuenta));
+}
+
+static void _ReportarAtaqueNucleo(class CMainLog * pMain, int iClientH, char * cMotivo)
+{
+	static char  s_cUltimaIP[21] = { 0 };
+	static DWORD s_dwUltimoAviso = 0;
+	static int   s_iOmitidos = 0;
+
+	char  cMsg[1024], cQuien[40], cOtros[400], cHistorial[400], cOmitidos[80], cIP[21], cEntrada[20];
+	DWORD dwNow;
+	int   i;
+
+	if ((pMain == NULL) || (cMotivo == NULL)) return;
+	if ((iClientH <= 0) || (iClientH >= DEF_MAXCLIENTSOCK)) return;
+	if (pMain->m_pClientList[iClientH] == NULL) return;
+
+	ZeroMemory(cIP, sizeof(cIP));
+	strncpy(cIP, pMain->m_pClientList[iClientH]->m_cIPaddress, sizeof(cIP) - 1);
+
+	// Anti-spam: de la misma IP, como mucho un aviso cada 5 segundos
+	dwNow = timeGetTime();
+	if ((strcmp(s_cUltimaIP, cIP) == 0) && ((dwNow - s_dwUltimoAviso) < 5000)) {
+		s_iOmitidos++;
+		return;
+	}
+
+	ZeroMemory(cOmitidos, sizeof(cOmitidos));
+	if (s_iOmitidos > 0) {
+		_snprintf(cOmitidos, sizeof(cOmitidos) - 1, " | +%d intentos anteriores de %s sin mostrar", s_iOmitidos, s_cUltimaIP);
+	}
+	strncpy(s_cUltimaIP, cIP, sizeof(s_cUltimaIP) - 1);
+	s_dwUltimoAviso = dwNow;
+	s_iOmitidos = 0;
+
+	ZeroMemory(cQuien, sizeof(cQuien));
+	if (pMain->m_pClientList[iClientH]->m_cAccountName[0] != 0)
+		_snprintf(cQuien, sizeof(cQuien) - 1, "cuenta %.10s", pMain->m_pClientList[iClientH]->m_cAccountName);
+	else strcpy(cQuien, "sin login");
+
+	// Otras conexiones abiertas ahora desde la misma IP con cuenta
+	ZeroMemory(cOtros, sizeof(cOtros));
+	for (i = 1; i < DEF_MAXCLIENTSOCK; i++) {
+		if ((i == iClientH) || (pMain->m_pClientList[i] == NULL)) continue;
+		if (pMain->m_pClientList[i]->m_cAccountName[0] == 0) continue;
+		if (strcmp(pMain->m_pClientList[i]->m_cIPaddress, cIP) != 0) continue;
+
+		ZeroMemory(cEntrada, sizeof(cEntrada));
+		_snprintf(cEntrada, sizeof(cEntrada) - 1, "%s%.10s", (cOtros[0] != 0) ? ", " : "", pMain->m_pClientList[i]->m_cAccountName);
+		if (strlen(cOtros) + strlen(cEntrada) < sizeof(cOtros) - 1) strcat(cOtros, cEntrada);
+	}
+	if (cOtros[0] == 0) strcpy(cOtros, "nadie");
+
+	// Cuentas que entraron antes desde esa IP
+	ZeroMemory(cHistorial, sizeof(cHistorial));
+	std::map<std::string, std::vector<std::string> >::iterator it = G_mapIPCuentas.find(std::string(cIP));
+	if (it != G_mapIPCuentas.end()) {
+		for (size_t k = 0; k < it->second.size(); k++) {
+			if (strlen(cHistorial) + it->second[k].size() + 3 >= sizeof(cHistorial)) break;
+			if (cHistorial[0] != 0) strcat(cHistorial, ", ");
+			strcat(cHistorial, it->second[k].c_str());
+		}
+	}
+	if (cHistorial[0] == 0) strcpy(cHistorial, "ninguna desde que arranco el Nucleo");
+
+	ZeroMemory(cMsg, sizeof(cMsg));
+	_snprintf(cMsg, sizeof(cMsg) - 1, "NUCLEO: %s | IP %s | Conexion <%d>: %s | Cuentas conectadas con esa IP: %s | Cuentas que entraron antes desde esa IP: %s%s",
+		cMotivo, cIP, iClientH, cQuien, cOtros, cHistorial, cOmitidos);
+	PutLogAtaque(cMsg);
+}
 
 CMainLog::CMainLog(HWND hWnd)
 {
@@ -347,6 +450,15 @@ void CMainLog::OnClientSubLogSocketEvent(UINT message, WPARAM wParam, LPARAM lPa
 
 			case DEF_XSOCKEVENT_READCOMPLETE:
 				pData = m_pClientList[iClientH]->m_pXSock->pGetRcvDataPointer(&dwMsgSize, &cKey);
+				if (pData == NULL) {
+					// Cabecera que declara menos de 7 bytes: se avisa y se corta la conexion
+					char cMotivo[120];
+					wsprintf(cMotivo, "Paquete malformado (tamano declarado %d, minimo 7)", m_pClientList[iClientH]->m_pXSock->wGetRcvHeaderSize());
+					_ReportarAtaqueNucleo(this, iClientH, cMotivo);
+					delete m_pClientList[iClientH];
+					m_pClientList[iClientH] = NULL;
+					break;
+				}
 				if (bPutMsgQuene(DEF_MSGFROM_CLIENT, pData, dwMsgSize, iClientH, cKey) == FALSE) {
 					ErrorLogList("CRITICAL ERROR in LOGSERVER MsgQuene!!!");
 				}
@@ -359,6 +471,12 @@ void CMainLog::OnClientSubLogSocketEvent(UINT message, WPARAM wParam, LPARAM lPa
 				break;
 
 			case DEF_XSOCKEVENT_MSGSIZETOOLARGE:
+				// Tamano de paquete imposible: se avisa y se desconecta (sigue abajo)
+				{
+					char cMotivo[120];
+					wsprintf(cMotivo, "Paquete con tamano invalido (declara %d bytes)", m_pClientList[iClientH]->m_pXSock->wGetRcvHeaderSize());
+					_ReportarAtaqueNucleo(this, iClientH, cMotivo);
+				}
 			case DEF_XSOCKEVENT_SOCKETERROR:
 			case DEF_XSOCKEVENT_SOCKETCLOSED:
 			case DEF_XSOCKEVENT_QUENEFULL:
@@ -1377,6 +1495,7 @@ void CMainLog::RequestEnterGame(int iClientH, char *pData)
 
 		memcpy_secure(m_pClientList[iClientH]->m_cAccountName, cAccountName, 11);
 		memcpy_secure(m_pClientList[iClientH]->m_cWorldName, cWorldName, 30);
+		_RegistrarIPCuenta(m_pClientList[iClientH]->m_cIPaddress, cAccountName); // para los logs de ataque
 
 		if (OnPlayerAccountMessage(DEF_MSGACCOUNTSET_INIT, cAccountName, cAccountPass, 0, m_iLevel)) {
 			SendEventToClient(NUCLEO_RESPONSE_CONFIRM, NUCLEO_RESPONSE_CONFIRM, cData2, 38, iClientH);
@@ -1597,8 +1716,9 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 		dwFileSize = ftell(pFile);
 		rewind(pFile);
 
-		cp = (char*)malloc(sizeof(char)*dwFileSize);
-		fread(cp, dwFileSize, 1, pFile);
+		cp = (char*)malloc(dwFileSize + 1);
+		size_t rd_cp = fread(cp, 1, dwFileSize, pFile);
+		cp[rd_cp] = '\0';
 		pStrTok = new class CStrTok(cp, seps);
 
 		token = pStrTok->pGet();
@@ -1608,13 +1728,13 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 					case 1:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							return 1;
 						}
 
 						for (i = 1; i < DEF_MAXACCOUNTS; i++) {
 							if (m_pAccountList[i] != NULL) {
-								if (m_pAccountList[i]->cAccountName == token && m_pAccountList[i]->cPassword == cAccountPass) {
+								if (strcmp(m_pAccountList[i]->cAccountName, token) == 0 && strcmp(m_pAccountList[i]->cPassword, cAccountPass) == 0) {
 									strcpy(m_pClientList[iClientH]->m_cAccountName, token);
 									iAccountid = i;
 									*iAccount = i;
@@ -1641,7 +1761,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 					case 2:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -1653,7 +1773,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 					case 3:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -1667,7 +1787,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 							case 1:
 								if (strlen(token) <= 0) {
 									delete pStrTok;
-									delete cp;
+									free(cp);
 									delete m_pAccountList[iAccountid];
 									m_pAccountList[iAccountid] = NULL;
 									return 1;
@@ -1679,7 +1799,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 							case 2:
 								if (strlen(token) <= 0) {
 									delete pStrTok;
-									delete cp;
+									free(cp);
 									delete m_pAccountList[iAccountid];
 									m_pAccountList[iAccountid] = NULL;
 									return 1;
@@ -1691,7 +1811,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 							case 3:
 								if (strlen(token) <= 0) {
 									delete pStrTok;
-									delete cp;
+									free(cp);
 									delete m_pAccountList[iAccountid];
 									m_pAccountList[iAccountid] = NULL;
 									return 1;
@@ -1708,7 +1828,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 							case 1:
 								if (strlen(token) <= 0) {
 									delete pStrTok;
-									delete cp;
+									free(cp);
 									delete m_pAccountList[iAccountid];
 									m_pAccountList[iAccountid] = NULL;
 									return 1;
@@ -1720,7 +1840,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 							case 2:
 								if (strlen(token) <= 0) {
 									delete pStrTok;
-									delete cp;
+									free(cp);
 									delete m_pAccountList[iAccountid];
 									m_pAccountList[iAccountid] = NULL;
 									return 1;
@@ -1732,7 +1852,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 							case 3:
 								if (strlen(token) <= 0) {
 									delete pStrTok;
-									delete cp;
+									free(cp);
 									delete m_pAccountList[iAccountid];
 									m_pAccountList[iAccountid] = NULL;
 									return 1;
@@ -1777,7 +1897,7 @@ int CMainLog::GetAccountInfo(int iClientH, char cAccountName[11], char cAccountP
 		}
 
 		delete pStrTok;
-		delete cp;
+		free(cp);
 		if (pFile != NULL) fclose(pFile);
 #ifdef DEF_DEBUG
 	}
@@ -1865,7 +1985,7 @@ BOOL CMainLog::bReadServerConfigFile(char *cFn)
 			token = pStrTok->pGet();
 		}
 		delete pStrTok;
-		delete cp;
+		delete [] cp;
 	}
 
 	if (pFile != NULL) fclose(pFile);
@@ -2100,8 +2220,9 @@ int CMainLog::iGetCharacterData(char * cCharName, char * cMapName, short * sAppr
 		dwFileSize = ftell(pFile);
 		rewind(pFile);
 
-		cp = (char*)malloc(sizeof(char)*dwFileSize);
-		fread(cp, dwFileSize, 1, pFile);
+		cp = (char*)malloc(dwFileSize + 1);
+		size_t rd_cp = fread(cp, 1, dwFileSize, pFile);
+		cp[rd_cp] = '\0';
 		pStrTok = new class CStrTok(cp, seps);
 
 		cReadModeA = 0;
@@ -2247,7 +2368,7 @@ int CMainLog::iGetCharacterData(char * cCharName, char * cMapName, short * sAppr
 
 		if (pFile != NULL) fclose(pFile);
 		delete pStrTok;
-		delete cp;
+		free(cp);
 #ifdef DEF_DEBUG
 	}
 	catch (...) {
@@ -2527,6 +2648,7 @@ void CMainLog::OnMapServerRead(int iClientH)
 		if (m_pMapServerList[iClientH] == NULL) return;
 
 		pData = m_pMapServerList[iClientH]->m_pXSock->pGetRcvDataPointer(&dwMsgSize, &cKey);
+		if (pData == NULL) return;
 
 		if (bPutMsgQuene(DEF_MSGFROM_MAPSERVER, pData, dwMsgSize, iClientH, cKey) == FALSE) {
 			ErrorLogList("CRITICAL ERROR in CLIENT MsgQuene!!!");
@@ -2755,11 +2877,13 @@ void CMainLog::RequestPlayerData(int iClientH, char *pData)
 			fseek(pFile, 0, SEEK_END);
 			dwFileSize = ftell(pFile);
 			rewind(pFile);
-			cp2 = (char*)malloc(sizeof(char)*dwFileSize);
-			fread(cp2, dwFileSize, 1, pFile);
+			cp2 = (char*)malloc(dwFileSize + 1);
+			size_t rd_cp2 = fread(cp2, 1, dwFileSize, pFile);
+			cp2[rd_cp2] = '\0';
 			fclose(pFile);
 
 			memcpy_secure(cp, cp2, dwFileSize + 1);
+			free(cp2);
 			cp += dwFileSize + 1;
 
 			iRet = m_pMapServerList[iClientH]->m_pXSock->iSendMsg(G_cData50000, dwFileSize + 19, DEF_USE_ENCRYPTION);
@@ -2842,8 +2966,9 @@ void CMainLog::VerifyCharacterIntegrity(char *cCharacterName, char *cAccountName
 			dwFileSize = ftell(pFile);
 			rewind(pFile);
 
-			cp = (char*)malloc(sizeof(char)*dwFileSize);
-			fread(cp, dwFileSize, 1, pFile);
+			cp = (char*)malloc(dwFileSize + 1);
+			size_t rd_cp = fread(cp, 1, dwFileSize, pFile);
+			cp[rd_cp] = '\0';
 			pStrTok = new class CStrTok(cp, seps);
 
 			token = pStrTok->pGet();
@@ -2902,7 +3027,7 @@ void CMainLog::VerifyCharacterIntegrity(char *cCharacterName, char *cAccountName
 				token = pStrTok->pGet();
 			}
 			delete pStrTok;
-			delete cp;
+			free(cp);
 		}
 		if (pFile != NULL) fclose(pFile);
 		return;
@@ -2957,8 +3082,9 @@ void CMainLog::VerifyGuildIntegrity(char *cGuildName, DWORD *dwGuildGUID)
 			dwFileSize = ftell(pFile);
 			rewind(pFile);
 
-			cp = (char*)malloc(sizeof(char)*dwFileSize);
-			fread(cp, dwFileSize, 1, pFile);
+			cp = (char*)malloc(dwFileSize + 1);
+			size_t rd_cp = fread(cp, 1, dwFileSize, pFile);
+			cp[rd_cp] = '\0';
 			pStrTok = new class CStrTok(cp, seps);
 			token = pStrTok->pGet();
 			while (token != NULL) {
@@ -2976,7 +3102,7 @@ void CMainLog::VerifyGuildIntegrity(char *cGuildName, DWORD *dwGuildGUID)
 				token = pStrTok->pGet();
 			}
 			delete pStrTok;
-			delete cp;
+			free(cp);
 		}
 		if (pFile != NULL) fclose(pFile);
 		return;
@@ -4208,8 +4334,9 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 		dwFileSize = ftell(pFile);
 		rewind(pFile);
 
-		cp = (char*)malloc(sizeof(char) * dwFileSize);
-		fread(cp, dwFileSize, 1, pFile);
+		cp = (char*)malloc(dwFileSize + 1);
+		size_t rd_cp = fread(cp, 1, dwFileSize, pFile);
+		cp[rd_cp] = '\0';
 		pStrTok = new class CStrTok(cp, seps);
 
 		token = pStrTok->pGet();
@@ -4219,13 +4346,13 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 				case 1:
 					if (strlen(token) <= 0) {
 						delete pStrTok;
-						delete cp;
+						free(cp);
 						return 1;
 					}
 
 					for (i = 1; i < DEF_MAXACCOUNTS; i++) {
 						if (m_pAccountList[i] != NULL) {
-							if (m_pAccountList[i]->cAccountName == token && m_pAccountList[i]->cPassword == cAccountPass) {
+							if (strcmp(m_pAccountList[i]->cAccountName, token) == 0 && strcmp(m_pAccountList[i]->cPassword, cAccountPass) == 0) {
 								strcpy(m_pClientList[iClientH]->m_cAccountName, token);
 								iAccountid = i;
 								*iAccount = i;
@@ -4252,7 +4379,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 				case 2:
 					if (strlen(token) <= 0) {
 						delete pStrTok;
-						delete cp;
+						free(cp);
 						delete m_pAccountList[iAccountid];
 						m_pAccountList[iAccountid] = NULL;
 						return 1;
@@ -4264,7 +4391,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 				case 3:
 					if (strlen(token) <= 0) {
 						delete pStrTok;
-						delete cp;
+						free(cp);
 						delete m_pAccountList[iAccountid];
 						m_pAccountList[iAccountid] = NULL;
 						return 1;
@@ -4276,7 +4403,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 				case 4:
 					if (strlen(token) <= 0) {
 						delete pStrTok;
-						delete cp;
+						free(cp);
 						delete m_pAccountList[iAccountid];
 						m_pAccountList[iAccountid] = NULL;
 						return 1;
@@ -4290,7 +4417,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 					case 1:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -4302,7 +4429,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 					case 2:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -4314,7 +4441,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 					case 3:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -4331,7 +4458,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 					case 1:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -4343,7 +4470,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 					case 2:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -4355,7 +4482,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 					case 3:
 						if (strlen(token) <= 0) {
 							delete pStrTok;
-							delete cp;
+							free(cp);
 							delete m_pAccountList[iAccountid];
 							m_pAccountList[iAccountid] = NULL;
 							return 1;
@@ -4401,7 +4528,7 @@ int CMainLog::GetAccountInfo2(int iClientH, char cAccountName[11], char cEmail[5
 		}
 
 		delete pStrTok;
-		delete cp;
+		free(cp);
 		if (pFile != NULL) fclose(pFile);
 #ifdef DEF_DEBUG
 	}
